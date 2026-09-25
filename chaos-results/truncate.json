@@ -1,0 +1,33 @@
+== truncate: Detected by checksum -> healed
+{
+  "scenario": "truncate",
+  "expected": "Detected by checksum -> healed",
+  "load": {
+    "put_ok": 243,
+    "put_err": 0,
+    "get_ok": 343,
+    "get_err": 0,
+    "mismatch": 0,
+    "missing": 0,
+    "availability_pct": 100.0,
+    "put_p50_ms": 571.1,
+    "put_p99_ms": 3603.7,
+    "get_p50_ms": 254.5,
+    "get_p99_ms": 3271.7
+  },
+  "verify": {
+    "acknowledged": 930,
+    "lost": 0,
+    "wrong": 0,
+    "unreadable": 0,
+    "lost_keys": [],
+    "wrong_keys": [],
+    "PASS": true
+  },
+  "fault_seconds": 35.6,
+  "time_to_healthy_after_restore": 3.568148136138916
+}
+{
+  "scenarios": 1,
+  "all_acknowledged_objects_intact": true
+}

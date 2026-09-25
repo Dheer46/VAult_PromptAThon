@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vault Console</title>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--ink:#16181d;--muted:#667085;--line:#e4e7ec;--accent:#2f6fec;--accent-ink:#fff;
+--ok:#12805c;--ok-bg:#e7f6ef;--bad:#b42318;--bad-bg:#fdecea;--warn:#935f00;--warn-bg:#fff4dc;--chip:#eef2f7;
+--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--panel:#171a21;--ink:#e7e9ee;--muted:#98a2b3;--line:#2a2f3a;
+--accent:#5b8dff;--ok:#4ad295;--ok-bg:#12291f;--bad:#ff8a80;--bad-bg:#341716;--warn:#f5c05b;--warn-bg:#33270e;--chip:#222734}}
+*{box-sizing:border-box}body{margin:0;font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:6px 12px;border-radius:8px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.danger{color:var(--bad)}button:disabled{opacity:.5;cursor:default}
+input,select{font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);min-width:0}
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+nav{background:var(--panel);border-right:1px solid var(--line);padding:18px 12px;display:flex;flex-direction:column;gap:4px}
+.brand{font-weight:700;font-size:18px;padding:4px 10px 16px;display:flex;align-items:center;gap:8px}
+.brand i{width:26px;height:26px;border-radius:7px;background:var(--accent);display:inline-block}
+nav a{padding:8px 10px;border-radius:8px;color:var(--ink);text-decoration:none;cursor:pointer}
+nav a.on{background:var(--chip);font-weight:600}nav a.admin-only.hidden{display:none}
+nav .who{margin-top:auto;padding:10px;color:var(--muted);font-size:13px}
+main{padding:24px 28px;min-width:0}
+h1{font-size:22px;margin:0 0 4px}.sub{color:var(--muted);margin:0 0 20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+.stat .v{font-size:26px;font-weight:700}.stat .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:var(--muted);font-weight:600;font-size:12px}td.num{font-variant-numeric:tabular-nums}
+.chip{display:inline-block;padding:1px 8px;border-radius:99px;background:var(--chip);font-size:12px;margin-right:4px}
+.ok{background:var(--ok-bg);color:var(--ok)}.bad{background:var(--bad-bg);color:var(--bad)}.warn{background:var(--warn-bg);color:var(--warn)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row.end{justify-content:flex-end}.grow{flex:1}
+.crumbs a{color:var(--accent);cursor:pointer}.link{color:var(--accent);cursor:pointer}
+.drives{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.drive{width:92px;border:1px solid var(--line);border-radius:8px;padding:6px;font-size:11px}
+.drive b{display:block;font-size:12px}.drive.ok{border-color:var(--ok)}.drive.bad{border-color:var(--bad)}
+.bar{height:6px;background:var(--chip);border-radius:9px;overflow:hidden;margin-top:4px}.bar>i{display:block;height:100%;background:var(--accent)}
+.toast{position:fixed;right:20px;bottom:20px;padding:10px 14px;border-radius:10px;background:var(--ink);color:var(--bg);opacity:0;transition:.2s}
+.toast.show{opacity:1}.muted{color:var(--muted)}.mono{font-family:var(--mono);font-size:12px}
+.login{max-width:360px;margin:12vh auto}.login input{width:100%;margin-bottom:10px}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:18px;text-align:center;color:var(--muted)}.drop.over{border-color:var(--accent);color:var(--accent)}
+.arch{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.arch .g h3{margin:0 0 8px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.box{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px}
+@media (max-width:760px){.app{grid-template-columns:1fr}nav{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}
+nav .who,.brand{display:none}main{padding:16px}.hide-sm{display:none}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div class="toast" id="toast"></div>
+<script>
+const $ = (s, el=document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtB = n => { if (n == null) return "–"; const u=["B","KiB","MiB","GiB","TiB"]; let i=0; while(n>=1024&&i<u.length-1){n/=1024;i++} return (i?n.toFixed(1):n)+" "+u[i]; };
+const fmtT = t => t ? new Date(t*1000).toLocaleString() : "–";
+let ME = null, VIEW = "buckets", STATE = {bucket:"", prefix:""}, TIMER = null;
+
+function toast(msg, bad){ const t=$("#toast"); t.textContent=msg; t.style.background=bad?"var(--bad)":""; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),2600); }
+async function api(path, opts={}){
+  const r = await fetch("/vault/console/api/"+path, {credentials:"same-origin", ...opts});
+  if (r.status === 401) { ME=null; render(); throw new Error("Please log in"); }
+  const ct = r.headers.get("content-type")||"";
+  const data = ct.includes("json") ? await r.json() : await r.text();
+  if (!r.ok) throw new Error(data.message || data.error || ("HTTP "+r.status));
+  return data;
+}
+const q = o => new URLSearchParams(o).toString();
+
+// ---------------------------------------------------------------- shell
+function render(){
+  clearInterval(TIMER);
+  if (!ME) return renderLogin();
+  const items = [["buckets","Buckets"],["browser","Object browser"],["overview","Architecture"],["cluster","Cluster & drives"],
+                 ["healing","Healing"],["replication","Replication"],["services","Services"],["users","Users"]];
+  const adminViews = new Set(["overview","cluster","healing","replication","services","users"]);
+  $("#root").innerHTML = `<div class="app"><nav><div class="brand"><i></i>Vault</div>
+    ${items.map(([k,l])=>`<a data-v="${k}" class="${k===VIEW?"on":""} ${adminViews.has(k)&&!ME.admin?"admin-only hidden":""}">${l}</a>`).join("")}
+    <div class="who">${esc(ME.user)} · ${esc(ME.source||"")}<br><span class="link" id="logout">Log out</span></div></nav>
+    <main id="main"><p class="muted">Loading…</p></main></div>`;
+  document.querySelectorAll("nav a").forEach(a => a.onclick = () => { VIEW=a.dataset.v; render(); });
+  $("#logout").onclick = async () => { await api("logout",{method:"POST"}); ME=null; render(); };
+  const fn = {buckets:vBuckets, browser:vBrowser, overview:vOverview, cluster:vCluster, healing:vHealing,
+              replication:vReplication, services:vServices, users:vUsers}[VIEW];
+  const run = () => fn().catch(e => { $("#main").innerHTML = `<div class="card bad">${esc(e.message)}</div>`; });
+  run();
+  if (["cluster","healing","replication","overview"].includes(VIEW)) TIMER = setInterval(run, 3000);
+}
+
+function renderLogin(){
+  $("#root").innerHTML = `<div class="login card"><h1>Vault Console</h1><p class="sub">Sign in with an access key and secret key.</p>
+    <form id="lf"><input id="ak" placeholder="Access key" autocomplete="username" required>
+    <input id="sk" type="password" placeholder="Secret key" autocomplete="current-password" required>
+    <button class="primary" style="width:100%">Sign in</button><p id="le" class="muted"></p></form></div>`;
+  $("#lf").onsubmit = async e => { e.preventDefault();
+    try { await api("login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({access_key:$("#ak").value,secret_key:$("#sk").value})});
+          ME = await api("me"); render(); } catch(err){ $("#le").textContent = err.message; } };
+}
+
+// -------------------------------------------------------------- buckets
+async function vBuckets(){
+  const bs = await api("buckets");
+  $("#main").innerHTML = `<h1>Buckets</h1><p class="sub">Every bucket is erasure coded across the cluster (EC 5+3 per set).</p>
+   <div class="card"><form class="row" id="nb"><input id="bn" class="grow" placeholder="new-bucket-name" pattern="[a-z0-9][a-z0-9.\\-]{1,61}[a-z0-9]" required>
+   <label class="row"><input type="checkbox" id="bv"> Versioning</label><button class="primary">Create bucket</button></form></div>
+   <div class="card"><table><tr><th>Name</th><th class="hide-sm">Created</th><th>Features</th><th></th></tr>
+   ${bs.map(b=>`<tr><td><span class="link" data-open="${esc(b.name)}">${esc(b.name)}</span></td><td class="hide-sm">${fmtT(b.created)}</td>
+    <td>${b.versioning==="Enabled"?'<span class="chip ok">versioned</span>':""}${b.encrypted?'<span class="chip">SSE default</span>':""}
+    ${b.replication?'<span class="chip">replicated</span>':""}${b.lifecycle?'<span class="chip">lifecycle</span>':""}
+    ${b.events?'<span class="chip">events</span>':""}${b.public?'<span class="chip warn">policy</span>':""}</td>
+    <td class="row end"><button class="danger" data-del="${esc(b.name)}">Delete</button></td></tr>`).join("") || `<tr><td colspan=4 class="muted">No buckets yet.</td></tr>`}</table></div>`;
+  $("#nb").onsubmit = async e => { e.preventDefault();
+    try { await api("buckets",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:$("#bn").value,versioning:$("#bv").checked})}); toast("Bucket created"); vBuckets(); } catch(err){ toast(err.message,1); } };
+  document.querySelectorAll("[data-open]").forEach(a => a.onclick = () => { STATE={bucket:a.dataset.open,prefix:""}; VIEW="browser"; render(); });
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    if (!confirm(`Delete bucket ${b.dataset.del}? It must be empty.`)) return;
+    try { await api("buckets?"+q({name:b.dataset.del}),{method:"DELETE"}); toast("Bucket deleted"); vBuckets(); } catch(err){ toast(err.message,1); } });
+}
+
+// -------------------------------------------------------------- browser
+async function vBrowser(){
+  const bs = await api("buckets");
+  if (!STATE.bucket && bs.length) STATE.bucket = bs[0].name;
+  if (!STATE.bucket) { $("#main").innerHTML = `<h1>Object browser</h1><div class="card muted">Create a bucket first.</div>`; return; }
+  const d = await api("objects?"+q({bucket:STATE.bucket,prefix:STATE.prefix}));
+  const parts = STATE.prefix.split("/").filter(Boolean);
+  const crumbs = [`<a data-p="">${esc(STATE.bucket)}</a>`].concat(parts.map((p,i)=>`<a data-p="${esc(parts.slice(0,i+1).join("/")+"/")}">${esc(p)}</a>`)).join(" / ");
+  $("#main").innerHTML = `<h1>Object browser</h1>
+   <div class="row" style="margin-bottom:12px"><select id="bsel">${bs.map(b=>`<option ${b.name===STATE.bucket?"selected":""}>${esc(b.name)}</option>`).join("")}</select>
+   <div class="crumbs grow">${crumbs}</div><label class="row"><input type="checkbox" id="enc"> Encrypt (SSE)</label>
+   <button class="primary" id="up">Upload files</button><input type="file" id="fi" multiple hidden></div>
+   <div class="drop" id="drop">Drop files here to upload to <b>${esc(STATE.bucket)}/${esc(STATE.prefix)}</b></div>
+   <div class="card" style="margin-top:12px"><table><tr><th>Name</th><th>Size</th><th class="hide-sm">Modified</th><th class="hide-sm">Info</th><th></th></tr>
+   ${d.prefixes.map(p=>`<tr><td>📁 <span class="link" data-p="${esc(p)}">${esc(p.slice(STATE.prefix.length))}</span></td><td></td><td class="hide-sm"></td><td class="hide-sm"></td><td></td></tr>`).join("")}
+   ${d.objects.map(o=>`<tr><td class="mono">${esc(o.key.slice(STATE.prefix.length))}</td><td class="num">${fmtB(o.size)}</td>
+     <td class="hide-sm">${fmtT(o.modified)}</td><td class="hide-sm">${o.encrypted?'<span class="chip ok">encrypted</span>':""}
+     ${o.storage_class!=="STANDARD"?`<span class="chip warn">${esc(o.storage_class)}</span>`:""}${o.replication?`<span class="chip">${esc(o.replication)}</span>`:""}</td>
+     <td class="row end"><a class="link" href="/vault/console/api/download?${q({bucket:STATE.bucket,key:o.key})}">Download</a>
+     <button class="danger" data-k="${esc(o.key)}">Delete</button></td></tr>`).join("")}
+   ${!d.prefixes.length&&!d.objects.length?`<tr><td colspan=5 class="muted">Empty. Upload something.</td></tr>`:""}</table>
+   ${d.truncated?'<p class="muted">Showing the first 500 entries.</p>':""}</div>`;
+  $("#bsel").onchange = e => { STATE={bucket:e.target.value,prefix:""}; vBrowser(); };
+  document.querySelectorAll("[data-p]").forEach(a => a.onclick = () => { STATE.prefix=a.dataset.p; vBrowser(); });
+  document.querySelectorAll("[data-k]").forEach(b => b.onclick = async () => {
+    if (!confirm("Delete "+b.dataset.k+"?")) return;
+    try { await api("objects?"+q({bucket:STATE.bucket,key:b.dataset.k}),{method:"DELETE"}); toast("Deleted"); vBrowser(); } catch(err){ toast(err.message,1); } });
+  const upload = async files => { for (const f of files) {
+      try { await api("objects?"+q({bucket:STATE.bucket,key:STATE.prefix+f.name}),{method:"PUT",body:f,
+              headers:{"x-content-type":f.type||"application/octet-stream","x-encrypt":$("#enc").checked?"1":"0"}}); toast("Uploaded "+f.name); }
+      catch(err){ toast(f.name+": "+err.message,1); } } vBrowser(); };
+  $("#up").onclick = () => $("#fi").click(); $("#fi").onchange = e => upload(e.target.files);
+  const dz = $("#drop"); dz.ondragover = e => { e.preventDefault(); dz.classList.add("over"); };
+  dz.ondragleave = () => dz.classList.remove("over"); dz.ondrop = e => { e.preventDefault(); dz.classList.remove("over"); upload(e.dataTransfer.files); };
+}
+
+// ------------------------------------------------------------ architecture
+async function vOverview(){
+  const [c, s, r, h] = await Promise.all([api("cluster"), api("services"), api("replication"), api("healing")]);
+  const sets = c.storage.sets, drivesOk = sets.reduce((a,x)=>a+x.online,0), drivesAll = sets.reduce((a,x)=>a+x.n,0);
+  const nodesUp = c.nodes.filter(n=>n.state==="online").length;
+  const st = ok => ok===null||ok===undefined ? '<span class="chip">n/a</span>' : ok ? '<span class="chip ok">up</span>' : '<span class="chip bad">down</span>';
+  const evOk = s.targets.events.every(t=>t.online), auOk = s.targets.audit.every(t=>t.online);
+  const groups = [
+    ["Client and API", [["API Surface",true],["Application Facade",true],["Object API",true]]],
+    ["Storage Core", [["Storage Facade",sets.every(x=>x.online>=x.write_quorum)],["Bucket Metadata",true],["Object Metadata",true],
+                      ["Erasure Coding (native C++)",c.nodes.every(n=>n.native!==false)],["Disk Storage",drivesOk===drivesAll]]],
+    ["Distributed Operations", [["Scanner Service",true],["Healing Service",true],["Cluster RPC",nodesUp===c.nodes.length],["Bucket Replication",r.total.failed===0]]],
+    ["Security and Governance", [["Lifecycle Engine",true],["Encryption KMS",s.kms.online],["IAM and OIDC",true]]],
+    ["External Integrations", [["Event Notifications",evOk],["Replication Metrics",true],["Audit Pipeline",auOk]]],
+    ["Outside", [["KMS Provider (HashiCorp Vault)",s.kms.online],["Keystone Service",s.keystone.configured?s.keystone.online:null],
+                 ["Event Targets",evOk],["Audit Targets",auOk],["Remote S3 tiers: "+(s.tiers.join(", ")||"none"),null]]]];
+  $("#main").innerHTML = `<h1>Architecture</h1><p class="sub">Every box of the design, with live status. Refreshes every 3 s.</p>
+   <div class="grid" style="margin-bottom:16px">
+    <div class="card stat"><div class="k">Nodes online</div><div class="v">${nodesUp}/${c.nodes.length}</div></div>
+    <div class="card stat"><div class="k">Drives online</div><div class="v">${drivesOk}/${drivesAll}</div></div>
+    <div class="card stat"><div class="k">Erasure sets</div><div class="v">${sets.length} × EC ${sets[0].n-sets[0].parity}+${sets[0].parity}</div></div>
+    <div class="card stat"><div class="k">Replication backlog</div><div class="v">${r.total.queued_count}</div></div>
+    <div class="card stat"><div class="k">Heal queue</div><div class="v">${h.queue + h.mrf}</div></div></div>
+   <div class="arch">${groups.map(([g,bs])=>`<div class="card g"><h3>${esc(g)}</h3>${bs.map(([n,ok])=>`<div class="box"><span>${esc(n)}</span>${st(ok)}</div>`).join("")}</div>`).join("")}</div>`;
+}
+
+// ---------------------------------------------------------------- cluster
+async function vCluster(){
+  const c = await api("cluster");
+  $("#main").innerHTML = `<h1>Cluster & drives</h1><p class="sub">Each erasure set tolerates ${c.storage.sets[0].parity} failed drives. Refreshes every 3 s.</p>
+   <div class="card"><table><tr><th>Node</th><th>State</th><th>Uptime</th><th>Native core</th><th>Drives</th><th>Scanner cycle</th></tr>
+   ${c.nodes.map(n=>`<tr><td><b>${esc(n.node)}</b></td><td>${n.state==="online"?'<span class="chip ok">online</span>':'<span class="chip bad">offline</span>'}</td>
+    <td class="num">${n.uptime!=null?Math.round(n.uptime/60)+" min":"–"}</td><td>${n.native?"ISA-L + BLAKE3":"–"}</td>
+    <td class="num">${(n.drives||[]).filter(d=>d.online!==false).length}/${(n.drives||[]).length}</td><td class="num">${n.scanner?.cycle ?? "–"}</td></tr>`).join("")}</table></div>
+   ${c.storage.sets.map(s=>`<div class="card"><div class="row"><b class="grow">Erasure set ${s.set}</b>
+     <span class="chip ${s.online>=s.write_quorum?"ok":"bad"}">${s.online}/${s.n} online</span>
+     <span class="chip">read quorum ${s.read_quorum}</span><span class="chip">write quorum ${s.write_quorum}</span></div>
+     <div class="drives">${s.drives.map(d=>{ const pct = d.total? d.used/d.total*100:0;
+       return `<div class="drive ${d.state==="ok"?"ok":"bad"}" title="${esc(d.endpoint)}"><b>${esc(d.endpoint.split(":")[0])}</b>${esc((d.endpoint.split(":")[1]||"").replace("/data/",""))}
+       ${d.state==="ok"?`<div class="bar"><i style="width:${pct.toFixed(0)}%"></i></div>${d.healing?'<span class="chip warn">healing</span>':""}`:`<div class="muted">${esc(d.error||"offline")}</div>`}</div>`}).join("")}</div></div>`).join("")}`;
+}
+
+// ---------------------------------------------------------------- healing
+async function vHealing(){
+  const h = await api("healing"), bs = await api("buckets");
+  const drives = Object.entries(h.drives||{});
+  $("#main").innerHTML = `<h1>Healing</h1><p class="sub">MRF heals partial writes in seconds; the scanner finds bitrot and stale copies; wiped drives are rebuilt automatically.</p>
+   <div class="grid"><div class="card stat"><div class="k">MRF queue</div><div class="v">${h.mrf}</div></div>
+   <div class="card stat"><div class="k">Heal queue</div><div class="v">${h.queue}</div></div>
+   <div class="card stat"><div class="k">Drive heals</div><div class="v">${drives.length}</div></div></div>
+   <div class="card"><div class="row"><select id="hb">${bs.map(b=>`<option>${esc(b.name)}</option>`).join("")}</select>
+    <button class="primary" id="hgo">Heal bucket now</button><span id="hres" class="muted"></span></div></div>
+   <div class="card"><b>Drive heals</b><table>${drives.map(([ep,s])=>`<tr><td class="mono">${esc(ep)}</td><td>${esc(s.state)}</td>
+     <td style="width:40%"><div class="bar"><i style="width:${((s.progress||0)*100).toFixed(0)}%"></i></div></td><td class="num">${s.objects??""}/${s.total??""}</td></tr>`).join("")
+     || '<tr><td class="muted">No drive heals on this node.</td></tr>'}</table></div>
+   <div class="card"><b>Recent object heals</b><table>${(h.recent||[]).slice().reverse().map(r=>`<tr><td class="mono">${esc(r.bucket)}/${esc(r.key)}</td>
+     <td>${r.healed.length} drive(s) repaired${r.dangling_removed.length?", stale copies removed":""}</td><td>${fmtT(r.time)}</td></tr>`).join("")
+     || '<tr><td class="muted">Nothing needed healing recently.</td></tr>'}</table></div>`;
+  $("#hgo").onclick = async () => { clearInterval(TIMER); $("#hres").textContent = "Healing…";
+    try { const r = await api("heal?"+q({bucket:$("#hb").value}),{method:"POST"}); $("#hres").textContent = `Scanned ${r.scanned}, healed ${r.healed}.`; }
+    catch(err){ $("#hres").textContent = err.message; } };
+}
+
+// ------------------------------------------------------------ replication
+async function vReplication(){
+  const r = await api("replication"), t = r.total;
+  $("#main").innerHTML = `<h1>Replication</h1><p class="sub">Bucket replication to Remote S3, aggregated from every node.</p>
+   <div class="grid">${[["Queued",t.queued_count],["Queued bytes",fmtB(t.queued_bytes)],["In flight",t.in_flight],["Completed",t.completed],
+     ["Failed",t.failed],["Lag",t.lag_seconds.toFixed(1)+" s"],["Latency p99",t.latency_p99.toFixed(2)+" s"]]
+     .map(([k,v])=>`<div class="card stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")}</div>
+   <div class="card"><table><tr><th>Node</th><th>Queued</th><th>Completed</th><th>Failed</th><th>Lag</th></tr>
+   ${r.nodes.map(n=>`<tr><td>${esc(n.node)}</td><td class="num">${n.queued_count}</td><td class="num">${n.completed}</td><td class="num">${n.failed}</td><td class="num">${(n.lag_seconds||0).toFixed(1)} s</td></tr>`).join("")}</table></div>`;
+}
+
+// --------------------------------------------------------------- services
+async function vServices(){
+  const s = await api("services"), u = await api("usage");
+  const st = ok => ok ? '<span class="chip ok">online</span>' : '<span class="chip bad">offline</span>';
+  $("#main").innerHTML = `<h1>Services</h1><p class="sub">External services from the diagram and per-bucket usage from the scanner.</p>
+   <div class="card"><table><tr><th>Service</th><th>Status</th><th>Detail</th></tr>
+    <tr><td>KMS Provider</td><td>${st(s.kms.online)}</td><td class="mono">${esc(s.kms.provider)} ${esc(s.kms.addr||"")}</td></tr>
+    <tr><td>Keystone</td><td>${s.keystone.configured?st(s.keystone.online):'<span class="chip">not configured</span>'}</td><td></td></tr>
+    ${s.targets.events.map(t=>`<tr><td>Event target</td><td>${st(t.online)}</td><td class="mono">${esc(t.arn)} · queued ${t.queued}</td></tr>`).join("")}
+    ${s.targets.audit.map(t=>`<tr><td>Audit target</td><td>${st(t.online)}</td><td class="mono">${esc(t.id)} · queued ${t.queued}</td></tr>`).join("")}
+    <tr><td>Remote S3 tiers</td><td></td><td>${esc(s.tiers.join(", ")||"none configured")}</td></tr></table></div>
+   <div class="card"><b>Usage by bucket</b> <span class="muted">(updated each scanner cycle)</span><table><tr><th>Bucket</th><th>Objects</th><th>Versions</th><th>Size</th><th>Repl. pending</th></tr>
+   ${Object.entries(u.buckets).map(([b,x])=>`<tr><td>${esc(b)}</td><td class="num">${x.objects}</td><td class="num">${x.versions}</td><td class="num">${fmtB(x.bytes)}</td><td class="num">${x.replication_pending}</td></tr>`).join("")
+     || '<tr><td class="muted" colspan=5>No scanner data yet.</td></tr>'}</table></div>`;
+}
+
+// ------------------------------------------------------------------ users
+async function vUsers(){
+  const d = await api("users");
+  $("#main").innerHTML = `<h1>Users</h1><p class="sub">Local IAM users. Keystone and OIDC users are managed in their own systems.</p>
+   <div class="card"><form class="row" id="nu"><input id="uak" placeholder="access key" required><input id="usk" type="password" placeholder="secret key (8+ chars)" minlength="8" required>
+   <select id="upol">${d.policies.map(p=>`<option>${esc(p)}</option>`).join("")}</select><button class="primary">Add user</button></form></div>
+   <div class="card"><table><tr><th>Access key</th><th>Status</th><th>Policies</th><th></th></tr>
+   ${d.users.map(u=>`<tr><td class="mono">${esc(u.access_key)}</td><td><span class="chip ${u.status==="enabled"?"ok":"bad"}">${esc(u.status)}</span></td>
+    <td>${u.policies.map(p=>`<span class="chip">${esc(p)}</span>`).join("")}</td><td class="row end"><button class="danger" data-u="${esc(u.access_key)}">Remove</button></td></tr>`).join("")
+    || '<tr><td class="muted" colspan=4>No users yet (the root user always exists).</td></tr>'}</table></div>`;
+  $("#nu").onsubmit = async e => { e.preventDefault();
+    try { await api("users",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({access_key:$("#uak").value,secret_key:$("#usk").value,policies:[$("#upol").value]})}); toast("User added"); vUsers(); }
+    catch(err){ toast(err.message,1); } };
+  document.querySelectorAll("[data-u]").forEach(b => b.onclick = async () => { if (!confirm("Remove "+b.dataset.u+"?")) return;
+    try { await api("users?"+q({access_key:b.dataset.u}),{method:"DELETE"}); toast("Removed"); vUsers(); } catch(err){ toast(err.message,1); } });
+}
+
+api("me").then(m => { ME=m; render(); }).catch(() => render());
+</script>
+</body>
+</html>

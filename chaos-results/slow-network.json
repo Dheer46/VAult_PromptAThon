@@ -1,0 +1,33 @@
+== slow-network: Higher latency, no errors, no data loss
+{
+  "scenario": "slow-network",
+  "expected": "Higher latency, no errors, no data loss",
+  "load": {
+    "put_ok": 154,
+    "put_err": 0,
+    "get_ok": 213,
+    "get_err": 0,
+    "mismatch": 0,
+    "missing": 0,
+    "availability_pct": 100.0,
+    "put_p50_ms": 483.2,
+    "put_p99_ms": 9682.5,
+    "get_p50_ms": 245.1,
+    "get_p99_ms": 11899.8
+  },
+  "verify": {
+    "acknowledged": 1437,
+    "lost": 0,
+    "wrong": 0,
+    "unreadable": 0,
+    "lost_keys": [],
+    "wrong_keys": [],
+    "PASS": true
+  },
+  "fault_seconds": 32.3,
+  "time_to_healthy_after_restore": 1.0772686004638672
+}
+{
+  "scenarios": 1,
+  "all_acknowledged_objects_intact": true
+}

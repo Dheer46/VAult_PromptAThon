@@ -1,0 +1,33 @@
+== slow-disk: Paused node treated as offline after timeouts; requests don't hang
+{
+  "scenario": "slow-disk",
+  "expected": "Paused node treated as offline after timeouts; requests don't hang",
+  "load": {
+    "put_ok": 160,
+    "put_err": 0,
+    "get_ok": 251,
+    "get_err": 0,
+    "mismatch": 0,
+    "missing": 0,
+    "availability_pct": 100.0,
+    "put_p50_ms": 482.8,
+    "put_p99_ms": 31182.6,
+    "get_p50_ms": 213.8,
+    "get_p99_ms": 31606.2
+  },
+  "verify": {
+    "acknowledged": 1283,
+    "lost": 0,
+    "wrong": 0,
+    "unreadable": 0,
+    "lost_keys": [],
+    "wrong_keys": [],
+    "PASS": true
+  },
+  "fault_seconds": 31.7,
+  "time_to_healthy_after_restore": 0.6272842884063721
+}
+{
+  "scenarios": 1,
+  "all_acknowledged_objects_intact": true
+}

@@ -1,0 +1,34 @@
+== concurrent-writers: Every final object equals exactly one written version
+{"concurrent_writers_bad_keys": []}
+{
+  "scenario": "concurrent-writers",
+  "expected": "Every final object equals exactly one written version",
+  "load": {
+    "put_ok": 138,
+    "put_err": 0,
+    "get_ok": 200,
+    "get_err": 0,
+    "mismatch": 0,
+    "missing": 0,
+    "availability_pct": 100.0,
+    "put_p50_ms": 830.4,
+    "put_p99_ms": 5774.0,
+    "get_p50_ms": 325.2,
+    "get_p99_ms": 30778.0
+  },
+  "verify": {
+    "acknowledged": 2307,
+    "lost": 0,
+    "wrong": 0,
+    "unreadable": 0,
+    "lost_keys": [],
+    "wrong_keys": [],
+    "PASS": true
+  },
+  "fault_seconds": 87.5,
+  "time_to_healthy_after_restore": 6.428256273269653
+}
+{
+  "scenarios": 1,
+  "all_acknowledged_objects_intact": true
+}

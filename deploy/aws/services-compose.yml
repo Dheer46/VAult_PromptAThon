@@ -1,0 +1,46 @@
+# The "services" EC2 node: KMS Provider, Keystone + MariaDB, Kafka, webhook receiver,
+# Prometheus, Grafana and the HAProxy entry point. Storage nodes run deploy/aws/run-node.sh.
+name: vault-services
+x-hosts: &hosts
+  extra_hosts: ["node1:10.42.1.11", "node2:10.42.1.12", "node3:10.42.1.13", "node4:10.42.1.14"]
+services:
+  lb:
+    image: haproxy:lts
+    <<: *hosts
+    ports: ["9000:9000", "8404:8404"]
+    volumes: [../haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro]
+  kms:  # use a non-dev HashiCorp Vault with AppRole auth for anything beyond a demo
+    image: hashicorp/vault:1.17
+    environment: { VAULT_DEV_ROOT_TOKEN_ID: "${VAULT_KMS_TOKEN:?set}", VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200" }
+    cap_add: [IPC_LOCK]
+    ports: ["8200:8200"]
+  kms-init:
+    image: hashicorp/vault:1.17
+    depends_on: [kms]
+    environment: { VAULT_ADDR: "http://kms:8200", VAULT_TOKEN: "${VAULT_KMS_TOKEN}" }
+    entrypoint: ["/bin/sh", "-c", "until vault status >/dev/null 2>&1; do sleep 1; done; vault secrets enable transit || true; vault write -f transit/keys/vault-default-key derived=true"]
+  keystone-db:
+    image: mariadb:11
+    environment: { MARIADB_ROOT_PASSWORD: root, MARIADB_DATABASE: keystone, MARIADB_USER: keystone, MARIADB_PASSWORD: keystone }
+    healthcheck: { test: ["CMD", "healthcheck.sh", "--connect"], interval: 5s, retries: 30 }
+  keystone:
+    build: ../keystone
+    depends_on: { keystone-db: { condition: service_healthy } }
+    ports: ["5000:5000"]
+  kafka:
+    image: redpandadata/redpanda:v24.2.7
+    command: redpanda start --overprovisioned --smp 1 --memory 1G --reserve-memory 0M --node-id 0
+      --check=false --kafka-addr 0.0.0.0:9092 --advertise-kafka-addr services:9092
+    ports: ["9092:9092"]
+  webhook:
+    build: ../webhook-receiver
+    ports: ["8080:8080"]
+  prometheus:
+    image: prom/prometheus:latest
+    <<: *hosts
+    volumes: [../prometheus.yml:/etc/prometheus/prometheus.yml:ro]
+    ports: ["9095:9090"]
+  grafana:
+    image: grafana/grafana:latest
+    ports: ["3000:3000"]
+    volumes: [../grafana:/etc/grafana/provisioning:ro]

@@ -1,0 +1,33 @@
+== bit-rot: Reads still correct; vault_bitrot_detected_total rises; deep scan repairs
+{
+  "scenario": "bit-rot",
+  "expected": "Reads still correct; vault_bitrot_detected_total rises; deep scan repairs",
+  "load": {
+    "put_ok": 236,
+    "put_err": 0,
+    "get_ok": 335,
+    "get_err": 0,
+    "mismatch": 0,
+    "missing": 0,
+    "availability_pct": 100.0,
+    "put_p50_ms": 529.2,
+    "put_p99_ms": 4179.9,
+    "get_p50_ms": 278.6,
+    "get_p99_ms": 3184.4
+  },
+  "verify": {
+    "acknowledged": 687,
+    "lost": 0,
+    "wrong": 0,
+    "unreadable": 0,
+    "lost_keys": [],
+    "wrong_keys": [],
+    "PASS": true
+  },
+  "fault_seconds": 45.2,
+  "time_to_healthy_after_restore": 1.2019758224487305
+}
+{
+  "scenarios": 1,
+  "all_acknowledged_objects_intact": true
+}

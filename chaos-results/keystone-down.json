@@ -1,0 +1,33 @@
+== keystone-down: Keystone users rejected (cached tokens until TTL), local users unaffected
+{
+  "scenario": "keystone-down",
+  "expected": "Keystone users rejected (cached tokens until TTL), local users unaffected",
+  "load": {
+    "put_ok": 219,
+    "put_err": 0,
+    "get_ok": 353,
+    "get_err": 0,
+    "mismatch": 0,
+    "missing": 0,
+    "availability_pct": 100.0,
+    "put_p50_ms": 517.5,
+    "put_p99_ms": 3526.6,
+    "get_p50_ms": 226.0,
+    "get_p99_ms": 3272.9
+  },
+  "verify": {
+    "acknowledged": 1910,
+    "lost": 0,
+    "wrong": 0,
+    "unreadable": 0,
+    "lost_keys": [],
+    "wrong_keys": [],
+    "PASS": true
+  },
+  "fault_seconds": 46.3,
+  "time_to_healthy_after_restore": 1.272141933441162
+}
+{
+  "scenarios": 1,
+  "all_acknowledged_objects_intact": true
+}

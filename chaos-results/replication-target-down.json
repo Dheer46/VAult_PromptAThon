@@ -1,0 +1,33 @@
+== replication-target-down: Backlog grows, drains after restore
+{
+  "scenario": "replication-target-down",
+  "expected": "Backlog grows, drains after restore",
+  "load": {
+    "put_ok": 259,
+    "put_err": 0,
+    "get_ok": 408,
+    "get_err": 0,
+    "mismatch": 0,
+    "missing": 0,
+    "availability_pct": 100.0,
+    "put_p50_ms": 556.3,
+    "put_p99_ms": 3640.5,
+    "get_p50_ms": 227.1,
+    "get_p99_ms": 3221.4
+  },
+  "verify": {
+    "acknowledged": 2169,
+    "lost": 0,
+    "wrong": 0,
+    "unreadable": 0,
+    "lost_keys": [],
+    "wrong_keys": [],
+    "PASS": true
+  },
+  "fault_seconds": 38.0,
+  "time_to_healthy_after_restore": 1.2001428604125977
+}
+{
+  "scenarios": 1,
+  "all_acknowledged_objects_intact": true
+}

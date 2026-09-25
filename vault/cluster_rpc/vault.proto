@@ -1,0 +1,66 @@
+syntax = "proto3";
+package vault;
+
+message DiskRef { string disk = 1; }
+message Empty {}
+message DiskInfoResp {
+  uint64 total = 1; uint64 free = 2; uint64 used = 3; bool healing = 4; string id = 5;
+  bool formatted = 6; double latency_ms = 7;
+}
+message VolReq { string disk = 1; string bucket = 2; bool force = 3; }
+message VolList { repeated string names = 1; }
+message VolInfo { string name = 1; double created = 2; }
+message MetaReq { string disk = 1; string bucket = 2; string key = 3; bytes data = 4; }
+message MetaResp { bytes data = 1; }
+message FileChunk { string disk = 1; string bucket = 2; string path = 3; int64 size = 4; bytes data = 5; }
+message ReadReq {
+  string disk = 1; string bucket = 2; string path = 3; int64 offset = 4; int64 length = 5;
+  int64 shard_size = 6;
+}
+message RenameReq {
+  string disk = 1; string src_bucket = 2; string src_path = 3; bytes meta = 4;
+  string dst_bucket = 5; string dst_key = 6;
+}
+message DeleteReq { string disk = 1; string bucket = 2; string path = 3; bool recursive = 4; }
+message VerifyReq { string disk = 1; string bucket = 2; string path = 3; int64 shard_size = 4; int64 file_size = 5; }
+message BoolResp { bool ok = 1; }
+message IntResp { int64 value = 1; }
+message WalkReq { string disk = 1; string bucket = 2; string prefix = 3; }
+message WalkEntry { string key = 1; bytes meta = 2; }
+message ListDirResp { repeated string names = 1; }
+
+service Storage {
+  rpc DiskInfo(DiskRef) returns (DiskInfoResp);
+  rpc MakeVol(VolReq) returns (Empty);
+  rpc ListVols(DiskRef) returns (VolList);
+  rpc StatVol(VolReq) returns (VolInfo);
+  rpc DeleteVol(VolReq) returns (Empty);
+  rpc ReadMeta(MetaReq) returns (MetaResp);
+  rpc WriteMeta(MetaReq) returns (Empty);
+  rpc ReadAll(MetaReq) returns (MetaResp);
+  rpc WriteAll(MetaReq) returns (Empty);
+  rpc CreateFile(stream FileChunk) returns (IntResp);  // first message carries path + size
+  rpc ReadFile(ReadReq) returns (stream FileChunk);
+  rpc RenameData(RenameReq) returns (Empty);
+  rpc Delete(DeleteReq) returns (Empty);
+  rpc VerifyFile(VerifyReq) returns (BoolResp);
+  rpc WalkDir(WalkReq) returns (stream WalkEntry);
+  rpc ListDir(MetaReq) returns (ListDirResp);
+}
+
+message LockReq { string resource = 1; string uid = 2; string owner = 3; int32 ttl_ms = 4; bool read = 5; }
+
+service Lock {
+  rpc Lock(LockReq) returns (BoolResp);
+  rpc Unlock(LockReq) returns (BoolResp);
+  rpc Refresh(LockReq) returns (BoolResp);
+  rpc ForceUnlock(LockReq) returns (BoolResp);
+}
+
+message PeerMsg { string kind = 1; string node = 2; bytes payload = 3; }
+
+service Peer {
+  rpc Notify(PeerMsg) returns (Empty);  // "reload-bucket-meta", "reload-iam", "heal-drive"...
+  rpc ServerInfo(Empty) returns (PeerMsg);
+  rpc ReplicationStats(Empty) returns (PeerMsg);
+}

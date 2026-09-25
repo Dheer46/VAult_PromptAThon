@@ -1,0 +1,33 @@
+== kms-down: Encrypted ops 503, plain ops fine; recovery automatic
+{
+  "scenario": "kms-down",
+  "expected": "Encrypted ops 503, plain ops fine; recovery automatic",
+  "load": {
+    "put_ok": 254,
+    "put_err": 0,
+    "get_ok": 367,
+    "get_err": 0,
+    "mismatch": 0,
+    "missing": 0,
+    "availability_pct": 100.0,
+    "put_p50_ms": 579.2,
+    "put_p99_ms": 2521.1,
+    "get_p50_ms": 235.6,
+    "get_p99_ms": 3306.9
+  },
+  "verify": {
+    "acknowledged": 1691,
+    "lost": 0,
+    "wrong": 0,
+    "unreadable": 0,
+    "lost_keys": [],
+    "wrong_keys": [],
+    "PASS": true
+  },
+  "fault_seconds": 39.1,
+  "time_to_healthy_after_restore": 1.1583082675933838
+}
+{
+  "scenarios": 1,
+  "all_acknowledged_objects_intact": true
+}

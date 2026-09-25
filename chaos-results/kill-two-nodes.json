@@ -1,0 +1,33 @@
+== kill-two-nodes: Writes fail with 503 (below quorum); no corruption
+{
+  "scenario": "kill-two-nodes",
+  "expected": "Writes fail with 503 (below quorum); no corruption",
+  "load": {
+    "put_ok": 81,
+    "put_err": 19,
+    "get_ok": 114,
+    "get_err": 25,
+    "mismatch": 0,
+    "missing": 0,
+    "availability_pct": 81.59,
+    "put_p50_ms": 479.1,
+    "put_p99_ms": 5191.4,
+    "get_p50_ms": 234.3,
+    "get_p99_ms": 3314.5
+  },
+  "verify": {
+    "acknowledged": 302,
+    "lost": 0,
+    "wrong": 0,
+    "unreadable": 0,
+    "lost_keys": [],
+    "wrong_keys": [],
+    "PASS": true
+  },
+  "fault_seconds": 34.1,
+  "time_to_healthy_after_restore": 1.448873519897461
+}
+{
+  "scenarios": 1,
+  "all_acknowledged_objects_intact": true
+}

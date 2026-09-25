@@ -1,0 +1,169 @@
+# Every box of the architecture diagram on one machine.
+#   docker compose -f deploy/docker-compose.yml up -d --build
+# S3 endpoint: http://localhost:${VAULT_S3_PORT:-9000} (HAProxy -> node1..node4, stats on :8404), root: vaultadmin / vaultadmin-secret
+# Host ports are overridable (VAULT_S3_PORT, GRAFANA_PORT, WEBHOOK_PORT, ...) if they clash.
+name: vault
+
+x-vault: &vault
+  build: { context: .., dockerfile: deploy/Dockerfile }
+  image: vault:latest
+  cap_add: [NET_ADMIN]
+  restart: unless-stopped
+  environment: &vault-env
+    VAULT_NODES: "http://node{1...4}:9000"          # expanded by config.py
+    VAULT_DRIVES: "/data/disk{1...4}"
+    VAULT_SET_SIZE: "8"                              # 16 drives = 2 erasure sets of 8, EC 5+3
+    VAULT_DEFAULT_PARITY: "3"
+    VAULT_ROOT_USER: vaultadmin
+    VAULT_ROOT_PASSWORD: vaultadmin-secret
+    VAULT_CLUSTER_SECRET: change-me-cluster-secret
+    VAULT_PUBLIC_URL: http://localhost:9000
+    # [Encryption KMS] -> [KMS Provider] (arrow #16)
+    VAULT_KMS_ADDR: http://kms:8200
+    VAULT_KMS_TOKEN: root
+    VAULT_KMS_DEFAULT_KEY: vault-default-key
+    # [IAM and OIDC] -> [Keystone Service] (arrow #17)
+    VAULT_KEYSTONE_URL: http://keystone:5000
+    VAULT_KEYSTONE_SERVICE_USER: vault-service
+    VAULT_KEYSTONE_SERVICE_PASSWORD: service-secret
+    VAULT_KEYSTONE_SERVICE_PROJECT: service
+    # [Event Notifications] -> [Event Targets] (arrow #13)
+    VAULT_EVENT_WEBHOOK: http://webhook:8080/events  # arn:vault:sqs::events:webhook
+    VAULT_EVENT_KAFKA: kafka:9092/vault-events       # arn:vault:sqs::events:kafka
+    # [Audit Pipeline] -> [Audit Targets] (arrow #14)
+    VAULT_AUDIT_WEBHOOK: http://webhook:8080/audit
+    VAULT_AUDIT_KAFKA: kafka:9092/vault-audit
+    VAULT_AUDIT_FILE: /var/log/vault/audit.jsonl
+    VAULT_SCANNER_CYCLE_PAUSE: "30"
+  depends_on:
+    kms-init: { condition: service_completed_successfully }
+    keystone: { condition: service_started }
+    kafka: { condition: service_started }
+    webhook: { condition: service_started }
+
+services:
+  node1:
+    <<: *vault
+    hostname: node1
+    environment: { <<: *vault-env, VAULT_NODE_NAME: node1 }
+    ports: ["${NODE1_PORT:-9001}:9000"]
+    volumes: [n1d1:/data/disk1, n1d2:/data/disk2, n1d3:/data/disk3, n1d4:/data/disk4, audit1:/var/log/vault]
+  node2:
+    <<: *vault
+    hostname: node2
+    environment: { <<: *vault-env, VAULT_NODE_NAME: node2 }
+    ports: ["${NODE2_PORT:-9002}:9000"]
+    volumes: [n2d1:/data/disk1, n2d2:/data/disk2, n2d3:/data/disk3, n2d4:/data/disk4, audit2:/var/log/vault]
+  node3:
+    <<: *vault
+    hostname: node3
+    environment: { <<: *vault-env, VAULT_NODE_NAME: node3 }
+    ports: ["${NODE3_PORT:-9003}:9000"]
+    volumes: [n3d1:/data/disk1, n3d2:/data/disk2, n3d3:/data/disk3, n3d4:/data/disk4, audit3:/var/log/vault]
+  node4:
+    <<: *vault
+    hostname: node4
+    environment: { <<: *vault-env, VAULT_NODE_NAME: node4 }
+    ports: ["${NODE4_PORT:-9004}:9000"]
+    volumes: [n4d1:/data/disk1, n4d2:/data/disk2, n4d3:/data/disk3, n4d4:/data/disk4, audit4:/var/log/vault]
+
+  lb:  # single entry point for clients ([Storage Client] -> [API Surface], arrow #2)
+    image: haproxy:lts
+    ports: ["${VAULT_S3_PORT:-9000}:9000", "${LB_STATS_PORT:-8404}:8404"]
+    volumes: [./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro]
+    depends_on: [node1, node2, node3, node4]
+    restart: unless-stopped
+
+  kms:  # [KMS Provider] HashiCorp Vault, Transit engine (dev mode: local testing only)
+    image: hashicorp/vault:1.17
+    environment: { VAULT_DEV_ROOT_TOKEN_ID: root, VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200" }
+    cap_add: [IPC_LOCK]
+    ports: ["${KMS_PORT:-8200}:8200"]
+  kms-init:
+    image: hashicorp/vault:1.17
+    depends_on: [kms]
+    environment: { VAULT_ADDR: "http://kms:8200", VAULT_TOKEN: root }
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until vault status >/dev/null 2>&1; do sleep 1; done
+        vault secrets enable transit || true
+        vault write -f transit/keys/vault-default-key derived=true
+        echo "transit ready"
+
+  keystone-db:
+    image: mariadb:11
+    environment: { MARIADB_ROOT_PASSWORD: root, MARIADB_DATABASE: keystone,
+                   MARIADB_USER: keystone, MARIADB_PASSWORD: keystone }
+    healthcheck: { test: ["CMD", "healthcheck.sh", "--connect"], interval: 5s, retries: 30 }
+  keystone:  # [Keystone Service]
+    build: ./keystone
+    depends_on: { keystone-db: { condition: service_healthy } }
+    ports: ["${KEYSTONE_PORT:-5000}:5000"]
+    restart: unless-stopped
+
+  remote-s3:  # [Remote S3] local stand-in: an independent single-node S3 server (a separate
+              # Vault instance; MinIO images are no longer published). Use real AWS S3 on EC2.
+    image: vault:latest
+    hostname: remote-s3
+    environment:
+      VAULT_NODE_NAME: remote-s3
+      VAULT_DRIVES: "/data/disk{1...4}"
+      VAULT_ROOT_USER: remote
+      VAULT_ROOT_PASSWORD: remote-secret
+    ports: ["${REMOTE_S3_PORT:-9090}:9000"]
+    volumes: [remote:/data]
+  remote-s3-init:
+    image: amazon/aws-cli:latest
+    depends_on: [remote-s3]
+    environment: { AWS_ACCESS_KEY_ID: remote, AWS_SECRET_ACCESS_KEY: remote-secret, AWS_DEFAULT_REGION: us-east-1 }
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until aws --endpoint-url http://remote-s3:9000 s3 ls >/dev/null 2>&1; do sleep 1; done
+        for b in vault-replica vault-cold-tier; do aws --endpoint-url http://remote-s3:9000 s3 mb s3://$$b || true; done
+        echo "remote buckets ready"
+
+  kafka:  # [Event Targets] / [Audit Targets]
+    image: redpandadata/redpanda:v24.2.7
+    command: redpanda start --overprovisioned --smp 1 --memory 512M --reserve-memory 0M
+      --node-id 0 --check=false --kafka-addr 0.0.0.0:9092 --advertise-kafka-addr kafka:9092
+    ports: ["${KAFKA_PORT:-19092}:9092"]
+  webhook:  # [Event Targets] / [Audit Targets]: logs and stores JSON
+    build: ./webhook-receiver
+    ports: ["${WEBHOOK_PORT:-8080}:8080"]
+    volumes: [webhook:/data]
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes: [./prometheus.yml:/etc/prometheus/prometheus.yml:ro]
+    ports: ["${PROMETHEUS_PORT:-9095}:9090"]
+  grafana:
+    image: grafana/grafana:latest
+    environment: { GF_AUTH_ANONYMOUS_ENABLED: "true", GF_AUTH_ANONYMOUS_ORG_ROLE: Admin }
+    ports: ["${GRAFANA_PORT:-3000}:3000"]
+    volumes: [./grafana:/etc/grafana/provisioning:ro]
+
+volumes:
+  n1d1: {}
+  n1d2: {}
+  n1d3: {}
+  n1d4: {}
+  n2d1: {}
+  n2d2: {}
+  n2d3: {}
+  n2d4: {}
+  n3d1: {}
+  n3d2: {}
+  n3d3: {}
+  n3d4: {}
+  n4d1: {}
+  n4d2: {}
+  n4d3: {}
+  n4d4: {}
+  audit1: {}
+  audit2: {}
+  audit3: {}
+  audit4: {}
+  remote: {}
+  webhook: {}

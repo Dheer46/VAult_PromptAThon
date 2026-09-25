@@ -1,0 +1,33 @@
+== wipe-drive: Detected as unformatted -> drive heal to 100%
+{
+  "scenario": "wipe-drive",
+  "expected": "Detected as unformatted -> drive heal to 100%",
+  "load": {
+    "put_ok": 149,
+    "put_err": 0,
+    "get_ok": 234,
+    "get_err": 0,
+    "mismatch": 0,
+    "missing": 0,
+    "availability_pct": 100.0,
+    "put_p50_ms": 977.9,
+    "put_p99_ms": 6784.6,
+    "get_p50_ms": 314.1,
+    "get_p99_ms": 3890.6
+  },
+  "verify": {
+    "acknowledged": 451,
+    "lost": 0,
+    "wrong": 0,
+    "unreadable": 0,
+    "lost_keys": [],
+    "wrong_keys": [],
+    "PASS": true
+  },
+  "fault_seconds": 34.8,
+  "time_to_healthy_after_restore": 1.3711233139038086
+}
+{
+  "scenarios": 1,
+  "all_acknowledged_objects_intact": true
+}

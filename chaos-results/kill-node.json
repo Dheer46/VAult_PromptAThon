@@ -1,0 +1,33 @@
+== kill-node: No failed requests at LB, reads decode from parity, MRF + drive heal after return
+{
+  "scenario": "kill-node",
+  "expected": "No failed requests at LB, reads decode from parity, MRF + drive heal after return",
+  "load": {
+    "put_ok": 221,
+    "put_err": 0,
+    "get_ok": 367,
+    "get_err": 0,
+    "mismatch": 0,
+    "missing": 0,
+    "availability_pct": 100.0,
+    "put_p50_ms": 526.7,
+    "put_p99_ms": 4386.6,
+    "get_p50_ms": 230.1,
+    "get_p99_ms": 4222.1
+  },
+  "verify": {
+    "acknowledged": 221,
+    "lost": 0,
+    "wrong": 0,
+    "unreadable": 0,
+    "lost_keys": [],
+    "wrong_keys": [],
+    "PASS": true
+  },
+  "fault_seconds": 51.4,
+  "time_to_healthy_after_restore": 2.0554394721984863
+}
+{
+  "scenarios": 1,
+  "all_acknowledged_objects_intact": true
+}

@@ -1,0 +1,10 @@
+data/
+__pycache__/
+*.pyc
+.pytest_cache/
+vault/cluster_rpc/generated/
+native/third_party/
+build/
+*.egg-info/
+.hypothesis/
+*.sqlite

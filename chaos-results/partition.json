@@ -1,0 +1,33 @@
+== partition: node4 can't take locks -> rejects writes; majority side continues
+{
+  "scenario": "partition",
+  "expected": "node4 can't take locks -> rejects writes; majority side continues",
+  "load": {
+    "put_ok": 193,
+    "put_err": 0,
+    "get_ok": 262,
+    "get_err": 1,
+    "mismatch": 0,
+    "missing": 0,
+    "availability_pct": 99.78,
+    "put_p50_ms": 571.7,
+    "put_p99_ms": 12334.1,
+    "get_p50_ms": 214.5,
+    "get_p99_ms": 5082.4
+  },
+  "verify": {
+    "acknowledged": 1123,
+    "lost": 0,
+    "wrong": 0,
+    "unreadable": 0,
+    "lost_keys": [],
+    "wrong_keys": [],
+    "PASS": true
+  },
+  "fault_seconds": 36.3,
+  "time_to_healthy_after_restore": 1.1849696636199951
+}
+{
+  "scenarios": 1,
+  "all_acknowledged_objects_intact": true
+}

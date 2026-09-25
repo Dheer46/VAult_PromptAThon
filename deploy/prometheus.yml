@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 5s
+scrape_configs:
+  - job_name: vault
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["node1:9000", "node2:9000", "node3:9000", "node4:9000"]
