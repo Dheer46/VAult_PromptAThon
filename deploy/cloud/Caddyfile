@@ -1,0 +1,18 @@
+# HTTPS in front of the Vault load balancer. Caddy obtains and renews a Let's Encrypt
+# certificate for $DOMAIN automatically (e.g. 203-0-113-10.sslip.io needs no DNS setup).
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy lb:9000 {
+		# stream large uploads/downloads instead of buffering them
+		flush_interval -1
+		transport http {
+			read_timeout 10m
+			write_timeout 10m
+		}
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+	}
+}

@@ -157,6 +157,20 @@ python -m pytest tests/unit tests/component tests/integration
 - `tests/chaos`: the correctness checker and 12 chaos scenarios against the Compose cluster:
   `python tests/chaos/chaos.py list`.
 
+## Deploy to a cloud server (real backend for the Vercel site)
+
+On a fresh Ubuntu 22.04/24.04 VM (2+ vCPU, 8 GB RAM, 40+ GB disk, inbound 22/80/443 open):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Dheer46/VAult_PromptAThon/main/deploy/cloud/setup.sh | sudo bash
+```
+
+It installs Docker, generates strong secrets, and starts the full cluster behind Caddy
+(automatic HTTPS at `https://<ip>.sslip.io`). Only ports 80/443 are public; HashiCorp Vault,
+Keystone, Kafka and Grafana stay on the private Docker network. Then point the Vercel site at it
+by adding `{ "source": "/vault/:path*", "destination": "https://<ip>.sslip.io/vault/:path*" }`
+to `vercel.json` `rewrites`.
+
 ## AWS EC2
 
 `deploy/aws/provision.sh` builds the budget layout (4 storage nodes × 4 gp3 volumes + 1 services node,
