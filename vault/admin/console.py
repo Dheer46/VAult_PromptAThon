@@ -3,6 +3,7 @@ session is an HMAC-signed cookie, and every call runs through the Application Fa
 with that identity, so IAM policies apply exactly as for S3 requests."""
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -20,6 +21,8 @@ from ..app_facade.context import RequestContext
 
 COOKIE = "vault_session"
 TTL = 12 * 3600
+OVERVIEW_TTL = 10.0     # after this many seconds the dashboard summary is recomputed in the background
+OVERVIEW_MAX_AGE = 300  # an older summary is never shown; the request waits for a fresh one
 STATIC = os.path.join(os.path.dirname(__file__), "console.html")
 
 
@@ -27,6 +30,8 @@ class ConsoleAPI:
     def __init__(self, node):
         self.n = node
         self._key = hashlib.sha256(f"console|{node.settings.root_password}".encode()).digest()
+        self._overview: dict[str, tuple[float, dict]] = {}  # access key -> (time, payload)
+        self._overview_busy: dict[str, asyncio.Task] = {}
 
     # ------------------------------------------------------------- session
     def _sign(self, ak: str) -> str:
@@ -77,9 +82,42 @@ class ConsoleAPI:
                 return r
             ident = self._identity(request)
             ctx = self._ctx(request, ident)
+            if m != "GET":  # a change made through the console makes the dashboard refresh next time
+                self._overview = {k: (0.0, v) for k, (_, v) in self._overview.items()}
             return await self._route(request, m, path, ident, ctx)
         except errors.S3Error as e:
             return JSONResponse({"error": e.code, "message": e.message}, status_code=e.status)
+
+    async def _refresh_overview(self, ak: str, ctx) -> dict:
+        payload = await self._build_overview(ctx)
+        self._overview[ak] = (time.monotonic(), payload)
+        return payload
+
+    async def _build_overview(self, ctx) -> dict:
+        app = self.n.app_facade
+
+        async def one(name):
+            try:
+                res = await app.list_objects(ctx, name, "", "", "", 1000)
+            except errors.S3Error:
+                return None, []
+            total, recent = 0, []
+            for o in res.objects:
+                size = app.objects.plain_size(o.version)
+                total += size
+                recent.append({"bucket": name, "key": o.key, "size": size,
+                               "modified": o.version.mod_time_ns / 1e9,
+                               "encrypted": "x-vault-internal-sse" in o.version.meta_sys,
+                               "replication": o.version.meta_sys.get("x-vault-replication-status", ""),
+                               "storage_class": o.version.meta_user.get("x-amz-storage-class", "STANDARD")})
+            return ({"name": name, "objects": len(res.objects), "bytes": total,
+                     "truncated": res.is_truncated}, recent)
+
+        # buckets are listed concurrently; each listing is a quorum read across the drives
+        results = await asyncio.gather(*(one(b["name"]) for b in await app.list_buckets(ctx)))
+        buckets = [b for b, _ in results if b]
+        recent = sorted((r for _, rs in results for r in rs), key=lambda r: r["modified"], reverse=True)
+        return {"buckets": buckets, "recent": recent[:12]}
 
     async def _route(self, request, m, path, ident, ctx) -> Response:
         app, n, q = self.n.app_facade, self.n, request.query_params
@@ -133,25 +171,18 @@ class ConsoleAPI:
             return JSONResponse({"ok": True})
         if path == "overview" and m == "GET":
             # dashboard feed: per-bucket totals + most recently modified objects
-            buckets, recent = [], []
-            for b in await app.list_buckets(ctx):
-                try:
-                    res = await app.list_objects(ctx, b["name"], "", "", "", 1000)
-                except errors.S3Error:
-                    continue
-                total = 0
-                for o in res.objects:
-                    size = app.objects.plain_size(o.version)
-                    total += size
-                    recent.append({"bucket": b["name"], "key": o.key, "size": size,
-                                   "modified": o.version.mod_time_ns / 1e9,
-                                   "encrypted": "x-vault-internal-sse" in o.version.meta_sys,
-                                   "replication": o.version.meta_sys.get("x-vault-replication-status", ""),
-                                   "storage_class": o.version.meta_user.get("x-amz-storage-class", "STANDARD")})
-                buckets.append({"name": b["name"], "objects": len(res.objects), "bytes": total,
-                                "truncated": res.is_truncated})
-            recent.sort(key=lambda r: r["modified"], reverse=True)
-            return JSONResponse({"buckets": buckets, "recent": recent[:12]})
+            # stale-while-revalidate: answer from the last summary at once and rebuild it
+            # in the background, so a large bucket never makes the dashboard wait
+            ak, now = ident.access_key, time.monotonic()
+            hit = self._overview.get(ak)
+            if hit and now - hit[0] < OVERVIEW_TTL:
+                return JSONResponse(hit[1])
+            task = self._overview_busy.get(ak)
+            if task is None or task.done():
+                task = self._overview_busy[ak] = asyncio.create_task(self._refresh_overview(ak, ctx))
+            if hit and (hit[0] == 0.0 or now - hit[0] < OVERVIEW_MAX_AGE):
+                return JSONResponse(hit[1])
+            return JSONResponse(await asyncio.shield(task))
         if path == "download":
             status, h, stream = await app.get_object(ctx, q["bucket"], q["key"], q.get("version") or None, {})
             name = urllib.parse.quote(q["key"].rsplit("/", 1)[-1])

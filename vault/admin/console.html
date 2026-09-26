@@ -344,19 +344,30 @@ function confirmDialog(title, body, action = "Confirm") {
 /* --------------------------------------------------------------- api */
 let ME = null;
 let DEMO = false;  // true when the page is hosted without a Vault backend (e.g. a static Vercel deploy)
+/* Tab switches draw at once from the last answer for each GET, then refresh quietly.
+   Any change (POST/PUT/DELETE) or sign-in/out empties the cache. */
+const CACHE = new Map();
+let USE_CACHE = false, CACHE_HITS = 0;
 async function api(path, opts = {}) {
   if (DEMO) return demoApi(path, opts);
+  const get = !opts.method || opts.method === "GET";
+  if (!get) CACHE.clear();
+  if (get && USE_CACHE && CACHE.has(path)) { CACHE_HITS++; return CACHE.get(path); }
   let r;
   try { r = await fetch("/vault/console/api/" + path, { credentials: "same-origin", ...opts }); }
   catch (e) { if (path === "me") return enterDemo(); throw new Error("Can't reach the Vault server."); }
   const isJson = (r.headers.get("content-type") || "").includes("json");
   if (path === "me" && (r.status === 404 || r.status === 405 || (!isJson && r.status !== 401))) return enterDemo();
   if (r.status === 401 && path !== "login") { ME = null; route(); throw new Error("Your session ended. Please sign in again."); }
-  if (r.status === 401 && path !== "login") { ME = null; route(); throw new Error("Your session ended. Please sign in again."); }
   const ct = r.headers.get("content-type") || "";
   const data = ct.includes("json") ? await r.json() : await r.text();
   if (!r.ok) throw new Error(data.message || data.error || ("Request failed (HTTP " + r.status + ")"));
+  if (get && path !== "me") CACHE.set(path, data);
   return data;
+}
+function warmCache() {  // after sign-in, fetch the main tabs in the background so the first visit is instant
+  const paths = ["overview", "buckets"].concat(ME && ME.admin ? ["cluster", "healing", "replication", "services", "usage"] : []);
+  paths.forEach(p => { if (!CACHE.has(p)) api(p).catch(() => {}); });
 }
 
 /* ---------------------------------------------------------- demo mode
@@ -504,11 +515,20 @@ function route() {
 async function show(view, focusHeading, quiet = false) {
   const main = $("#main");
   main.setAttribute("aria-busy", "true");
+  USE_CACHE = focusHeading; CACHE_HITS = 0;  // only a fresh navigation may draw from cache
   try { await view.fn(main); }
   catch (e) { main.innerHTML = `<h1 id="page-title">${esc(view.label)}</h1><div class="card" role="alert">${icon("alert")} ${esc(e.message)}</div>`; }
-  finally { main.removeAttribute("aria-busy"); }
+  finally { main.removeAttribute("aria-busy"); USE_CACHE = false; }
   if (focusHeading) { main.setAttribute("data-enter", ""); setTimeout(() => main.removeAttribute("data-enter"), 600); }
   if (focusHeading) { const h = $("#page-title"); if (h) { h.setAttribute("tabindex", "-1"); h.focus(); } announce(view.label + " page loaded"); }
+  if (focusHeading && CACHE_HITS) refresh(view);
+}
+async function refresh(view) {  // replace a cached first paint with fresh data, without disturbing the reader
+  const main = $("#main"), a = document.activeElement;
+  if (CURRENT !== view.id || (main.contains(a) && a !== main && a.id !== "page-title")) return;
+  const headingFocused = a && a.id === "page-title";
+  await show(view, false, true);
+  if (headingFocused && CURRENT === view.id) { const h = $("#page-title"); if (h) { h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); } }
 }
 
 const isDark = () => PREFS.theme === "dark" || PREFS.theme === "contrast" || (PREFS.theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
@@ -545,7 +565,7 @@ function renderShell() {
   syncThemeButton();
   $("#theme-toggle").onclick = () => { PREFS.theme = isDark() ? "light" : "dark"; applyPrefs(); syncThemeButton();
     announce(PREFS.theme === "dark" ? "Dark theme" : "Light theme"); };
-  $("#logout").onclick = async () => { try { await api("logout", { method: "POST" }); } catch (e) {} ME = null; CURRENT = null; announce("Signed out"); route(); };
+  $("#logout").onclick = async () => { try { await api("logout", { method: "POST" }); } catch (e) {} ME = null; CURRENT = null; CACHE.clear(); announce("Signed out"); route(); };
   $("#live-toggle").onclick = e => { PREFS.live = !PREFS.live; applyPrefs(); e.currentTarget.setAttribute("aria-pressed", PREFS.live);
     announce("Live updates " + (PREFS.live ? "on" : "paused")); };
 }
@@ -697,7 +717,7 @@ function renderLogin() {
     const btn = $("#lf button[type=submit]"); btn.disabled = true; $("#login-err").textContent = "";
     try {
       await api("login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ access_key: $("#ak").value, secret_key: $("#sk").value }) });
-      ME = await api("me"); CURRENT = null; announce("Signed in as " + ME.user); route();
+      CACHE.clear(); ME = await api("me"); CURRENT = null; announce("Signed in as " + ME.user); route(); warmCache();
     } catch (err) { $("#login-err").textContent = err.message; btn.disabled = false; $("#sk").focus(); }
   };
   $("#ak").focus();
@@ -1000,7 +1020,7 @@ async function vSettings(main) {
 
 /* --------------------------------------------------------------- boot */
 window.addEventListener("hashchange", route);
-api("me").then(m => { ME = m; route(); }).catch(() => route());
+api("me").then(m => { ME = m; route(); warmCache(); }).catch(() => route());
 </script>
 </body>
 </html>
