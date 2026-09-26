@@ -128,6 +128,7 @@ td.actions{text-align:right;white-space:nowrap}td.actions>*{margin-left:.35rem}
 dialog{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);color:var(--ink);padding:1.5rem;max-width:min(92vw,460px);box-shadow:var(--shadow)}
 dialog::backdrop{background:rgba(3,7,18,.6)}
 dialog .row{justify-content:flex-end;margin-top:1.25rem}
+.demo-note{margin:0;padding:.75rem 1rem;border-radius:12px;background:var(--warn-bg);color:var(--warn);border:1px solid currentColor;font-size:.95rem}
 .toasts{position:fixed;right:1rem;bottom:1rem;display:grid;gap:.5rem;z-index:50;max-width:min(92vw,380px)}
 .toast{padding:.8rem 1rem;border-radius:12px;background:var(--ink);color:var(--bg);box-shadow:var(--shadow);font-weight:600;display:flex;gap:.6rem;align-items:flex-start}
 .toast.bad{background:var(--bad-bg);color:var(--bad);border:1px solid var(--bad)}
@@ -221,14 +222,128 @@ function confirmDialog(title, body, action = "Confirm") {
 
 /* --------------------------------------------------------------- api */
 let ME = null;
+let DEMO = false;  // true when the page is hosted without a Vault backend (e.g. a static Vercel deploy)
 async function api(path, opts = {}) {
-  const r = await fetch("/vault/console/api/" + path, { credentials: "same-origin", ...opts });
+  if (DEMO) return demoApi(path, opts);
+  let r;
+  try { r = await fetch("/vault/console/api/" + path, { credentials: "same-origin", ...opts }); }
+  catch (e) { if (path === "me") return enterDemo(); throw new Error("Can't reach the Vault server."); }
+  const isJson = (r.headers.get("content-type") || "").includes("json");
+  if (path === "me" && (r.status === 404 || r.status === 405 || (!isJson && r.status !== 401))) return enterDemo();
+  if (r.status === 401 && path !== "login") { ME = null; route(); throw new Error("Your session ended. Please sign in again."); }
   if (r.status === 401 && path !== "login") { ME = null; route(); throw new Error("Your session ended. Please sign in again."); }
   const ct = r.headers.get("content-type") || "";
   const data = ct.includes("json") ? await r.json() : await r.text();
   if (!r.ok) throw new Error(data.message || data.error || ("Request failed (HTTP " + r.status + ")"));
   return data;
 }
+
+/* ---------------------------------------------------------- demo mode
+   Static hosting (no Vault backend) runs the console on sample data held in this
+   browser tab, clearly labelled. Nothing is stored anywhere. */
+const DEMO_USER = { access_key: "vaultadmin", secret_key: "vaultadmin-secret" };
+let DB = null;
+function enterDemo() {
+  DEMO = true;
+  document.documentElement.setAttribute("data-demo", "");
+  throw new Error("demo");  // boot treats this as "not signed in"
+}
+function demoSeed() {
+  const now = Date.now() / 1000, day = 86400;
+  const obj = (key, size, ageDays, extra = {}) => ({ key, size, modified: now - ageDays * day, etag: Math.random().toString(16).slice(2, 18),
+    version: "null", encrypted: false, storage_class: "STANDARD", replication: "", body: null, ...extra });
+  DB = {
+    session: false,
+    buckets: [
+      { name: "photos", created: now - 40 * day, versioning: "Enabled", encrypted: true, replication: true, lifecycle: true, events: true, public: false },
+      { name: "backups", created: now - 12 * day, versioning: "Unversioned", encrypted: true, replication: false, lifecycle: true, events: false, public: false },
+      { name: "public-assets", created: now - 3 * day, versioning: "Unversioned", encrypted: false, replication: false, lifecycle: false, events: false, public: true },
+    ],
+    objects: {
+      photos: [obj("2026/cat.jpg", 204800, 1, { encrypted: true, replication: "COMPLETED" }), obj("2026/dog.png", 1843200, 2, { encrypted: true, replication: "COMPLETED" }),
+               obj("2025/beach.jpg", 3145728, 90, { encrypted: true, storage_class: "COLD", replication: "COMPLETED" }), obj("readme.txt", 512, 5, { encrypted: true, replication: "PENDING" })],
+      backups: [obj("db/2026-09-25.sql.gz", 52428800, 1, { encrypted: true }), obj("db/2026-09-24.sql.gz", 51380224, 2, { encrypted: true }),
+                obj("db/2026-06-01.sql.gz", 48234496, 117, { encrypted: true, storage_class: "COLD" })],
+      "public-assets": [obj("logo.svg", 4096, 3), obj("css/site.css", 18432, 3)],
+    },
+    users: [{ access_key: "alice", status: "enabled", policies: ["readonly"] }, { access_key: "ci-uploader", status: "enabled", policies: ["writeonly"] }],
+    policies: ["consoleAdmin", "readonly", "readwrite", "writeonly"],
+    replicated: 1284, recent: [{ bucket: "photos", key: "2026/dog.png", healed: ["node3:/data/disk2"], dangling_removed: [], time: now - 3600 }],
+    started: now - 3 * 3600,
+  };
+}
+function demoCluster() {
+  const nodes = ["node1", "node2", "node3", "node4"], up = Math.floor(Date.now() / 1000 - DB.started);
+  const used = DB.buckets.reduce((a, b) => a + (DB.objects[b.name] || []).reduce((s, o) => s + o.size, 0), 0);
+  const drive = (n, d) => ({ endpoint: `${n}:/data/disk${d}`, state: "ok", total: 20 * 2 ** 30, used: Math.round(2 ** 30 * (1.5 + d * .4) + used * 1.6 / 16), healing: false });
+  const sets = [0, 1].map(s => ({ pool: 0, set: s, online: 8, n: 8, parity: 3, read_quorum: 5, write_quorum: 5,
+    drives: nodes.flatMap(n => [drive(n, s * 2 + 1), drive(n, s * 2 + 2)]) }));
+  return { nodes: nodes.map((n, i) => ({ node: n, state: "online", uptime: up - i * 7, native: true, version: "0.1.0",
+    drives: [1, 2, 3, 4].map(d => ({ online: true })), scanner: { cycle: 40 + Math.floor(up / 30) } })), storage: { sets } };
+}
+function demoUsage() {
+  const buckets = {};
+  for (const b of DB.buckets) { const os = DB.objects[b.name] || [];
+    buckets[b.name] = { objects: os.length, versions: os.length, delete_markers: 0, bytes: os.reduce((s, o) => s + o.size, 0),
+      replication_pending: os.filter(o => o.replication === "PENDING").length, replication_failed: 0 }; }
+  return { buckets, nodes: 4 };
+}
+async function demoApi(path, opts = {}) {
+  if (!DB) demoSeed();
+  await new Promise(r => setTimeout(r, 120));  // feel like a network call
+  const [rt, qs] = path.split("?"), p = Object.fromEntries(new URLSearchParams(qs || "")), m = (opts.method || "GET").toUpperCase();
+  const body = () => { try { return JSON.parse(opts.body || "{}"); } catch (e) { return {}; } };
+  const fail = msg => { throw new Error(msg); };
+  if (rt === "login") { const d = body();
+    if (d.access_key !== DEMO_USER.access_key || d.secret_key !== DEMO_USER.secret_key) fail("Invalid access key or secret. In demo mode use vaultadmin / vaultadmin-secret.");
+    DB.session = true; return { user: "vaultadmin", admin: true }; }
+  if (rt === "logout") { DB.session = false; return { ok: true }; }
+  if (!DB.session) { ME = null; setTimeout(() => route(), 0); fail("Please sign in."); }
+  const bucket = n => DB.buckets.find(b => b.name === n) || fail(`The bucket "${n}" does not exist.`);
+  switch (rt + " " + m) {
+    case "me GET": return { user: "vaultadmin", source: "demo", admin: true, policies: ["consoleAdmin"] };
+    case "buckets GET": return DB.buckets.map(b => ({ ...b }));
+    case "buckets POST": { const d = body(); if (DB.buckets.some(b => b.name === d.name)) fail("You already own a bucket with that name.");
+      DB.buckets.push({ name: d.name, created: Date.now() / 1000, versioning: d.versioning ? "Enabled" : "Unversioned", encrypted: false, replication: false, lifecycle: false, events: false, public: false });
+      DB.objects[d.name] = []; return { ok: true }; }
+    case "buckets DELETE": { bucket(p.name); if ((DB.objects[p.name] || []).length) fail("The bucket you tried to delete is not empty.");
+      DB.buckets = DB.buckets.filter(b => b.name !== p.name); delete DB.objects[p.name]; return { ok: true }; }
+    case "objects GET": { bucket(p.bucket); const pre = p.prefix || "", prefixes = new Set(), objects = [];
+      for (const o of (DB.objects[p.bucket] || []).slice().sort((a, b) => a.key.localeCompare(b.key))) {
+        if (!o.key.startsWith(pre)) continue; const rest = o.key.slice(pre.length), i = rest.indexOf("/");
+        if (i >= 0) prefixes.add(pre + rest.slice(0, i + 1)); else objects.push({ ...o, body: undefined }); }
+      return { prefixes: [...prefixes].sort(), objects, truncated: false, next: "" }; }
+    case "objects PUT": { bucket(p.bucket); const list = DB.objects[p.bucket];
+      const o = { key: p.key, size: opts.body?.size ?? 0, modified: Date.now() / 1000, etag: Math.random().toString(16).slice(2, 18), version: "null",
+        encrypted: opts.encrypt || bucket(p.bucket).encrypted, storage_class: "STANDARD", replication: bucket(p.bucket).replication ? "COMPLETED" : "", body: opts.body || null };
+      DB.objects[p.bucket] = list.filter(x => x.key !== p.key).concat(o); if (o.replication) DB.replicated++; return { etag: o.etag }; }
+    case "objects DELETE": bucket(p.bucket); DB.objects[p.bucket] = DB.objects[p.bucket].filter(o => o.key !== p.key); return { ok: true };
+    case "cluster GET": return demoCluster();
+    case "healing GET": return { queue: 0, mrf: 0, drives: {}, recent: DB.recent };
+    case "heal POST": { const n = (DB.objects[bucket(p.bucket).name] || []).length; return { bucket: p.bucket, prefix: "", scanned: n, healed: 0 }; }
+    case "replication GET": { const pend = Object.values(DB.objects).flat().filter(o => o.replication === "PENDING").length;
+      const node = i => ({ node: "node" + (i + 1), queued_count: i === 0 ? pend : 0, completed: Math.round(DB.replicated / 4), failed: 0, lag_seconds: i === 0 && pend ? 1.2 : 0 });
+      return { total: { queued_count: pend, queued_bytes: pend * 512, in_flight: 0, completed: DB.replicated, completed_bytes: DB.replicated * 900000, failed: 0,
+        lag_seconds: pend ? 1.2 : 0, latency_p99: 0.84 }, nodes: [0, 1, 2, 3].map(node) }; }
+    case "usage GET": return demoUsage();
+    case "services GET": return { kms: { provider: "hashicorp-vault-transit", online: true, addr: "http://kms:8200 (demo)" }, keystone: { configured: true, online: true },
+      targets: { events: [{ arn: "arn:vault:sqs::events:webhook", id: "webhook:events", online: true, queued: 0 }, { arn: "arn:vault:sqs::events:kafka", id: "kafka:events", online: true, queued: 0 }],
+                 audit: [{ id: "webhook:audit", online: true, queued: 0 }, { id: "kafka:audit", online: true, queued: 0 }, { id: "file:audit", online: true, queued: 0 }] }, tiers: ["COLD"] };
+    case "users GET": return { users: DB.users.map(u => ({ ...u })), policies: DB.policies };
+    case "users POST": { const d = body(); if (DB.users.some(u => u.access_key === d.access_key)) fail("That user already exists.");
+      DB.users.push({ access_key: d.access_key, status: "enabled", policies: d.policies || [] }); return { ok: true }; }
+    case "users DELETE": DB.users = DB.users.filter(u => u.access_key !== p.access_key); return { ok: true };
+  }
+  fail("Not available in demo mode.");
+}
+function demoDownload(key) {
+  const o = (DB.objects[STATE.bucket] || []).find(x => x.key === key); if (!o) return;
+  const blob = o.body instanceof Blob ? o.body : new Blob([`Demo file "${key}" (${fmtB(o.size)}).\nThis deployment has no storage backend, so sample objects have no real content.\n`], { type: "text/plain" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = key.split("/").pop() + (o.body ? "" : ".txt");
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  announce("Download started");
+}
+const demoNote = () => DEMO ? `<p class="demo-note" role="note"><strong>Demo mode.</strong> This deployment has no storage backend, so you're seeing sample data. Changes stay in this browser tab only. Run the real cluster with Docker (see the README) to store data.</p>` : "";
 
 /* ------------------------------------------------------------ routing */
 const VIEWS = [
@@ -290,6 +405,7 @@ function renderShell() {
       <header class="top">
         <p class="grow hint">Fault-tolerant S3 storage · erasure coded · self-healing</p>
         <button type="button" class="pill-toggle" id="live-toggle" aria-pressed="${PREFS.live}">Live updates</button>
+        ${DEMO ? `<div style="flex-basis:100%">${demoNote().replace('margin:0 0 1rem', '')}</div>` : ""}
       </header>
       <main id="main" tabindex="-1"></main>
     </div></div>`;
@@ -306,6 +422,7 @@ function renderLogin() {
       <div class="brand"><span class="logo" aria-hidden="true">${icon("bucket")}</span><span>Vault</span></div>
       <h1 id="page-title" style="margin-top:1rem">Sign in to the console</h1>
       <p class="sub">Use an access key and secret key. Administrators see cluster views too.</p>
+      ${DEMO ? demoNote().replace('class="demo-note"', 'class="demo-note" style="margin-bottom:1rem"').replace("</p>", " Sign in with <strong>vaultadmin</strong> / <strong>vaultadmin-secret</strong>.</p>") : ""}
       <form id="lf" novalidate>
         <div class="field"><label for="ak">Access key</label>
           <input id="ak" name="username" autocomplete="username" required aria-describedby="ak-err" spellcheck="false" autocapitalize="off">
@@ -410,7 +527,7 @@ async function vBrowser(main) {
       ${d.objects.map(o => { const name = o.key.slice(STATE.prefix.length); return `<tr><th scope="row" class="mono">${esc(name)}</th><td class="num">${fmtB(o.size)}</td>
         <td><time datetime="${isoT(o.modified)}">${fmtT(o.modified)}</time></td>
         <td>${[o.encrypted && chip("Encrypted", "ok"), o.storage_class !== "STANDARD" && chip("Tier: " + o.storage_class, "warn"), o.replication && chip("Replication: " + o.replication.toLowerCase(), "info")].filter(Boolean).join("") || '<span class="muted">Standard</span>'}</td>
-        <td class="actions"><a class="btn" href="/vault/console/api/download?${q({ bucket: STATE.bucket, key: o.key })}" aria-label="Download ${esc(name)}">Download</a>
+        <td class="actions"><a class="btn" data-dl="${esc(o.key)}" href="/vault/console/api/download?${q({ bucket: STATE.bucket, key: o.key })}" aria-label="Download ${esc(name)}">Download</a>
         <button type="button" class="danger" data-k="${esc(o.key)}" aria-label="Delete ${esc(name)}">Delete</button></td></tr>`; }).join("")}
       </tbody></table></div>${d.truncated ? '<p class="hint">Showing the first 500 entries.</p>' : ""}` : `<p class="empty">This folder is empty. Upload something above.</p>`}</section>`;
   $("#bsel").onchange = e => { STATE = { bucket: e.target.value, prefix: "" }; vBrowser(main).then(() => $("#bsel").focus()); announce("Showing bucket " + e.target.value); };
@@ -420,6 +537,7 @@ async function vBrowser(main) {
     try { await api("objects?" + q({ bucket: STATE.bucket, key: b.dataset.k }), { method: "DELETE" }); toast("Deleted " + b.dataset.k); await vBrowser(main); $("#page-title").focus(); }
     catch (err) { toast(err.message, true); }
   });
+  if (DEMO) $$("[data-dl]", main).forEach(a => a.onclick = e => { e.preventDefault(); demoDownload(a.dataset.dl); });
   $("#pick").onclick = () => $("#fi").click();
   $("#fi").onchange = e => uploadAll([...e.target.files], main);
   const dz = $("#drop");
@@ -429,6 +547,7 @@ async function vBrowser(main) {
 }
 
 function uploadOne(file, li) {
+  if (DEMO) return demoUpload(file, li);
   return new Promise((resolve, reject) => {
     const x = new XMLHttpRequest(), bar = li.querySelector("[role=progressbar]"), fill = bar.firstElementChild;
     x.open("PUT", "/vault/console/api/objects?" + q({ bucket: STATE.bucket, key: STATE.prefix + file.name }));
@@ -440,6 +559,12 @@ function uploadOne(file, li) {
     x.onerror = () => reject(new Error("Network error"));
     x.send(file);
   });
+}
+async function demoUpload(file, li) {
+  const bar = li.querySelector("[role=progressbar]"), fill = bar.firstElementChild;
+  for (const v of [15, 40, 70, 100]) { await new Promise(r => setTimeout(r, 120));
+    bar.setAttribute("aria-valuenow", v); bar.setAttribute("aria-valuetext", v + "%"); fill.style.width = v + "%"; }
+  await demoApi("objects?" + q({ bucket: STATE.bucket, key: STATE.prefix + file.name }), { method: "PUT", body: file, encrypt: $("#enc").checked });
 }
 async function uploadAll(files, main) {
   if (!files.length) return;
