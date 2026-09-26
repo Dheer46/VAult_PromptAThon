@@ -3,266 +3,629 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Vault web console: manage buckets and objects, and monitor the storage cluster, healing, replication and services.">
 <title>Vault Console</title>
 <style>
-:root{--bg:#f6f7f9;--panel:#fff;--ink:#16181d;--muted:#667085;--line:#e4e7ec;--accent:#2f6fec;--accent-ink:#fff;
---ok:#12805c;--ok-bg:#e7f6ef;--bad:#b42318;--bad-bg:#fdecea;--warn:#935f00;--warn-bg:#fff4dc;--chip:#eef2f7;
---mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--panel:#171a21;--ink:#e7e9ee;--muted:#98a2b3;--line:#2a2f3a;
---accent:#5b8dff;--ok:#4ad295;--ok-bg:#12291f;--bad:#ff8a80;--bad-bg:#341716;--warn:#f5c05b;--warn-bg:#33270e;--chip:#222734}}
-*{box-sizing:border-box}body{margin:0;font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
-button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:6px 12px;border-radius:8px}
+/* ---------- design tokens (all text pairs meet WCAG 2.2 AA contrast; UI borders >= 3:1) ---------- */
+:root{
+  --bg:#f3f5f9;--panel:#ffffff;--panel-2:#f8fafc;--ink:#101828;--muted:#475467;--line:#d8dde6;--ctl:#667085;
+  --accent:#1d4ed8;--accent-ink:#ffffff;--accent-soft:#e8efff;--focus:#1d4ed8;
+  --ok:#05603a;--ok-bg:#dcfae6;--bad:#b42318;--bad-bg:#fee4e2;--warn:#7a2e0e;--warn-bg:#fef0c7;--info:#1849a9;--info-bg:#e0eaff;
+  --chip:#eaecf0;--chip-ink:#344054;--shadow:0 1px 2px rgba(16,24,40,.06),0 4px 16px rgba(16,24,40,.06);
+  --radius:14px;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--scale:1;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme]){
+  --bg:#0b0f17;--panel:#121826;--panel-2:#161e2e;--ink:#f2f4f7;--muted:#b3bccb;--line:#2c3547;--ctl:#8591a6;
+  --accent:#8ab4ff;--accent-ink:#0b0f17;--accent-soft:#1a2745;--focus:#ffd166;
+  --ok:#75e0a7;--ok-bg:#0b2d1e;--bad:#fda29b;--bad-bg:#3b1512;--warn:#fec84b;--warn-bg:#3a2a07;--info:#a4bcfd;--info-bg:#1a2745;
+  --chip:#232c3d;--chip-ink:#d0d5dd;--shadow:0 1px 2px rgba(0,0,0,.4),0 6px 20px rgba(0,0,0,.35)}}
+:root[data-theme="dark"]{
+  --bg:#0b0f17;--panel:#121826;--panel-2:#161e2e;--ink:#f2f4f7;--muted:#b3bccb;--line:#2c3547;--ctl:#8591a6;
+  --accent:#8ab4ff;--accent-ink:#0b0f17;--accent-soft:#1a2745;--focus:#ffd166;
+  --ok:#75e0a7;--ok-bg:#0b2d1e;--bad:#fda29b;--bad-bg:#3b1512;--warn:#fec84b;--warn-bg:#3a2a07;--info:#a4bcfd;--info-bg:#1a2745;
+  --chip:#232c3d;--chip-ink:#d0d5dd;--shadow:0 1px 2px rgba(0,0,0,.4),0 6px 20px rgba(0,0,0,.35)}
+:root[data-theme="contrast"]{
+  --bg:#000;--panel:#000;--panel-2:#000;--ink:#fff;--muted:#fff;--line:#fff;--ctl:#fff;
+  --accent:#ffff00;--accent-ink:#000;--accent-soft:#000;--focus:#00ffff;
+  --ok:#00ff7f;--ok-bg:#000;--bad:#ff6b6b;--bad-bg:#000;--warn:#ffd700;--warn-bg:#000;--info:#9fd3ff;--info-bg:#000;
+  --chip:#000;--chip-ink:#fff;--shadow:none}
+:root[data-theme="contrast"] .chip,:root[data-theme="contrast"] .card{border:1px solid #fff}
+
+/* ---------- base ---------- */
+*{box-sizing:border-box}
+html{font-size:calc(16px * var(--scale))}
+body{margin:0;font:1rem/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.skip{position:absolute;left:12px;top:-60px;z-index:100;background:var(--accent);color:var(--accent-ink);padding:10px 14px;border-radius:10px;font-weight:600;text-decoration:none}
+.skip:focus{top:12px}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:6px}
+a{color:var(--accent)}
+h1{font-size:1.6rem;line-height:1.25;margin:0}h2{font-size:1.1rem;margin:0 0 .75rem}h3{font-size:.95rem;margin:0 0 .5rem}
+p{margin:.25rem 0}
+button,.btn{font:inherit;font-weight:600;cursor:pointer;border:1px solid var(--ctl);background:var(--panel);color:var(--ink);
+  padding:.55rem 1rem;border-radius:10px;min-height:44px;min-width:44px;display:inline-flex;align-items:center;gap:.5rem;text-decoration:none}
+button:hover,.btn:hover{background:var(--panel-2)}
 button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-button.danger{color:var(--bad)}button:disabled{opacity:.5;cursor:default}
-input,select{font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);min-width:0}
-.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
-nav{background:var(--panel);border-right:1px solid var(--line);padding:18px 12px;display:flex;flex-direction:column;gap:4px}
-.brand{font-weight:700;font-size:18px;padding:4px 10px 16px;display:flex;align-items:center;gap:8px}
-.brand i{width:26px;height:26px;border-radius:7px;background:var(--accent);display:inline-block}
-nav a{padding:8px 10px;border-radius:8px;color:var(--ink);text-decoration:none;cursor:pointer}
-nav a.on{background:var(--chip);font-weight:600}nav a.admin-only.hidden{display:none}
-nav .who{margin-top:auto;padding:10px;color:var(--muted);font-size:13px}
-main{padding:24px 28px;min-width:0}
-h1{font-size:22px;margin:0 0 4px}.sub{color:var(--muted);margin:0 0 20px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
-.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
-.stat .v{font-size:26px;font-weight:700}.stat .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
-table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
-th{color:var(--muted);font-weight:600;font-size:12px}td.num{font-variant-numeric:tabular-nums}
-.chip{display:inline-block;padding:1px 8px;border-radius:99px;background:var(--chip);font-size:12px;margin-right:4px}
-.ok{background:var(--ok-bg);color:var(--ok)}.bad{background:var(--bad-bg);color:var(--bad)}.warn{background:var(--warn-bg);color:var(--warn)}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row.end{justify-content:flex-end}.grow{flex:1}
-.crumbs a{color:var(--accent);cursor:pointer}.link{color:var(--accent);cursor:pointer}
-.drives{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.drive{width:92px;border:1px solid var(--line);border-radius:8px;padding:6px;font-size:11px}
-.drive b{display:block;font-size:12px}.drive.ok{border-color:var(--ok)}.drive.bad{border-color:var(--bad)}
-.bar{height:6px;background:var(--chip);border-radius:9px;overflow:hidden;margin-top:4px}.bar>i{display:block;height:100%;background:var(--accent)}
-.toast{position:fixed;right:20px;bottom:20px;padding:10px 14px;border-radius:10px;background:var(--ink);color:var(--bg);opacity:0;transition:.2s}
-.toast.show{opacity:1}.muted{color:var(--muted)}.mono{font-family:var(--mono);font-size:12px}
-.login{max-width:360px;margin:12vh auto}.login input{width:100%;margin-bottom:10px}
-.drop{border:2px dashed var(--line);border-radius:12px;padding:18px;text-align:center;color:var(--muted)}.drop.over{border-color:var(--accent);color:var(--accent)}
-.arch{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
-.arch .g h3{margin:0 0 8px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.box{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px}
-@media (max-width:760px){.app{grid-template-columns:1fr}nav{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}
-nav .who,.brand{display:none}main{padding:16px}.hide-sm{display:none}}
+button.primary:hover{filter:brightness(1.08);background:var(--accent)}
+button.danger{color:var(--bad);border-color:var(--bad)}
+button.ghost{border-color:transparent;background:transparent}
+button:disabled{opacity:.55;cursor:not-allowed}
+input,select{font:inherit;padding:.55rem .75rem;min-height:44px;border:1px solid var(--ctl);border-radius:10px;background:var(--panel);color:var(--ink);min-width:0}
+input[aria-invalid="true"]{border-color:var(--bad);border-width:2px}
+label{font-weight:600}
+.field{display:flex;flex-direction:column;gap:.35rem;min-width:0}
+.hint{color:var(--muted);font-size:.875rem;font-weight:400}
+.err{color:var(--bad);font-size:.9rem;font-weight:600;min-height:1.2em}
+svg.i{width:1.15em;height:1.15em;flex:none}
+
+/* ---------- layout ---------- */
+.app{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+.app>*{min-width:0} /* let wide tables scroll inside their box instead of widening the page (WCAG 1.4.10) */
+.side{background:var(--panel);border-right:1px solid var(--line);padding:1.25rem 1rem;display:flex;flex-direction:column;gap:1rem;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:.65rem;font-weight:800;font-size:1.2rem;letter-spacing:-.01em}
+.logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#7c3aed);display:grid;place-items:center;color:#fff}
+.side nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.side nav a{display:flex;align-items:center;gap:.7rem;padding:.6rem .75rem;border-radius:10px;color:var(--ink);text-decoration:none;min-height:44px}
+.side nav a:hover{background:var(--panel-2)}
+.side nav a[aria-current="page"]{background:var(--accent-soft);color:var(--accent);font-weight:700;box-shadow:inset 3px 0 0 var(--accent)}
+.navgroup{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;margin:.75rem .75rem .25rem}
+.me{margin-top:auto;border-top:1px solid var(--line);padding-top:1rem;display:flex;flex-direction:column;gap:.5rem}
+.me .who{display:flex;align-items:center;gap:.6rem}.avatar{width:36px;height:36px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-weight:800}
+.top{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;padding:1rem 2rem;border-bottom:1px solid var(--line);background:var(--panel)}
+.top .grow{flex:1}
+main{padding:1.75rem 2rem 3rem;min-width:0;outline:none}
+.page-head{display:flex;align-items:flex-end;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem}.page-head .grow{flex:1;min-width:240px}
+.sub{color:var(--muted);margin-top:.35rem}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem;box-shadow:var(--shadow)}
+.grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fill,minmax(min(190px,100%),1fr));margin-bottom:1rem}
+.stat{position:relative;overflow:hidden}
+.stat .k{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.stat .v{overflow-wrap:anywhere;font-size:1.9rem;font-weight:800;letter-spacing:-.02em;margin-top:.2rem;font-variant-numeric:tabular-nums}
+.stat .note{font-size:.85rem;color:var(--muted)}
+.stat::after{content:"";position:absolute;right:-30px;top:-30px;width:110px;height:110px;border-radius:50%;background:var(--accent-soft);opacity:.7}
+.stat>*{position:relative;z-index:1}
+.row{display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap}.row.center{align-items:center}.grow{flex:1}
+.tbl{overflow-x:auto;border-radius:10px;position:relative} /* contains .sr-only descendants so they cannot widen the page */
+table{width:100%;border-collapse:collapse;min-width:520px}
+caption{text-align:left;font-weight:700;padding:0 0 .6rem}
+th,td{text-align:left;padding:.7rem .8rem;border-bottom:1px solid var(--line);vertical-align:middle}
+thead th{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;background:var(--panel-2)}
+tbody tr:hover{background:var(--panel-2)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+td.actions{text-align:right;white-space:nowrap}td.actions>*{margin-left:.35rem}
+.chip{display:inline-flex;align-items:center;gap:.3rem;padding:.1rem .6rem;border-radius:99px;background:var(--chip);color:var(--chip-ink);font-size:.8rem;font-weight:600;margin:.1rem .25rem .1rem 0;overflow-wrap:anywhere}
+.chip.ok{background:var(--ok-bg);color:var(--ok)}.chip.bad{background:var(--bad-bg);color:var(--bad)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}.chip.info{background:var(--info-bg);color:var(--info)}
+.chip .dot{width:.5rem;height:.5rem;border-radius:50%;background:currentColor}
+.mono{font-family:var(--mono);font-size:.875rem;word-break:break-all}
+.muted{color:var(--muted)}
+.meter{height:.6rem;background:var(--chip);border-radius:99px;overflow:hidden;min-width:80px}
+.meter>span{display:block;height:100%;background:var(--accent);border-radius:99px}
+:root[data-theme="contrast"] .meter{border:1px solid #fff}
+.drives{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(150px,100%),1fr));gap:.6rem;list-style:none;margin:.75rem 0 0;padding:0}
+.drive{border:1px solid var(--line);border-left:5px solid var(--ok);border-radius:10px;padding:.6rem .75rem;background:var(--panel-2)}
+.drive.bad{border-left-color:var(--bad)}.drive strong{display:block}
+.crumbs ol{list-style:none;display:flex;flex-wrap:wrap;gap:.25rem;margin:0;padding:0;align-items:center}
+.crumbs li+li::before{content:"/";color:var(--muted);margin-right:.25rem}
+.crumbs button{min-height:36px;padding:.2rem .5rem;border:0;background:none;color:var(--accent);text-decoration:underline}
+.crumbs [aria-current]{font-weight:700;color:var(--ink);text-decoration:none}
+.drop{border:2px dashed var(--ctl);border-radius:var(--radius);padding:1.5rem;text-align:center;color:var(--muted);background:var(--panel)}
+.drop.over{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.uploads{list-style:none;margin:.75rem 0 0;padding:0;display:grid;gap:.5rem}
+.uploads li{display:grid;grid-template-columns:1fr 160px auto;gap:.75rem;align-items:center}
+.arch{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr));gap:1rem}
+.arch ul{list-style:none;margin:0;padding:0;display:grid;gap:.45rem}
+.arch li{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:.5rem;padding:.55rem .75rem;border:1px solid var(--line);border-radius:10px;background:var(--panel-2)}
+.empty{padding:1.5rem;text-align:center;color:var(--muted)}
+.pill-toggle[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.login-wrap{min-height:100vh;display:grid;place-items:center;padding:1.5rem;
+  background:radial-gradient(1200px 600px at 10% -10%,var(--accent-soft),transparent),var(--bg)}
+.login{width:100%;max-width:440px}
+.login .card{padding:2rem}
+.login form{display:grid;gap:1rem;margin-top:1.25rem}
+.pw{display:flex;gap:.5rem}.pw input{flex:1;min-width:8rem}
+dialog{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);color:var(--ink);padding:1.5rem;max-width:min(92vw,460px);box-shadow:var(--shadow)}
+dialog::backdrop{background:rgba(3,7,18,.6)}
+dialog .row{justify-content:flex-end;margin-top:1.25rem}
+.toasts{position:fixed;right:1rem;bottom:1rem;display:grid;gap:.5rem;z-index:50;max-width:min(92vw,380px)}
+.toast{padding:.8rem 1rem;border-radius:12px;background:var(--ink);color:var(--bg);box-shadow:var(--shadow);font-weight:600;display:flex;gap:.6rem;align-items:flex-start}
+.toast.bad{background:var(--bad-bg);color:var(--bad);border:1px solid var(--bad)}
+.settings{display:grid;gap:.75rem}
+@media (prefers-reduced-motion:no-preference){:root:not([data-motion="reduce"]) .toast{animation:pop .18s ease-out}
+  :root:not([data-motion="reduce"]) .meter>span{transition:width .4s ease}}
+@keyframes pop{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+@media (forced-colors:active){.chip,.card,.drive,button{border:1px solid CanvasText}.meter>span{background:Highlight}}
+@media (max-width:860px){.app{grid-template-columns:1fr}.side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}
+  .side nav ul{flex-direction:row;flex-wrap:wrap}.me{margin-top:0}main,.top{padding:1rem}.uploads li{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to main content</a>
 <div id="root"></div>
-<div class="toast" id="toast"></div>
+<!-- screen reader announcements: polite for status, assertive for errors -->
+<div id="live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+<div id="alert" class="sr-only" role="alert" aria-atomic="true"></div>
+<div class="toasts" aria-hidden="true" id="toasts"></div>
+<dialog id="dlg" aria-labelledby="dlg-title" aria-describedby="dlg-body">
+  <h2 id="dlg-title">Confirm</h2><p id="dlg-body"></p>
+  <div class="row"><button type="button" id="dlg-no">Cancel</button><button type="button" class="primary" id="dlg-yes">Confirm</button></div>
+</dialog>
 <script>
-const $ = (s, el=document) => el.querySelector(s);
+"use strict";
+/* ---------------------------------------------------------------- helpers */
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const fmtB = n => { if (n == null) return "–"; const u=["B","KiB","MiB","GiB","TiB"]; let i=0; while(n>=1024&&i<u.length-1){n/=1024;i++} return (i?n.toFixed(1):n)+" "+u[i]; };
-const fmtT = t => t ? new Date(t*1000).toLocaleString() : "–";
-let ME = null, VIEW = "buckets", STATE = {bucket:"", prefix:""}, TIMER = null;
+const fmtB = n => { if (n == null) return "–"; const u = ["B","KiB","MiB","GiB","TiB"]; let i = 0; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; } return (i ? n.toFixed(1) : n) + " " + u[i]; };
+const fmtT = t => t ? new Date(t * 1000).toLocaleString() : "–";
+const isoT = t => t ? new Date(t * 1000).toISOString() : "";
+const q = o => new URLSearchParams(o).toString();
+const ICON = {
+  bucket:'<path d="M4 7h16l-1.5 12a2 2 0 0 1-2 1.8h-9a2 2 0 0 1-2-1.8L4 7z"/><path d="M3 7c0-1.7 4-3 9-3s9 1.3 9 3"/>',
+  files:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+  arch:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  server:'<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
+  heal:'<path d="M12 21s-7-4.4-9.3-9A5 5 0 0 1 12 6a5 5 0 0 1 9.3 6c-2.3 4.6-9.3 9-9.3 9z"/><path d="M12 10v5M9.5 12.5h5"/>',
+  repl:'<path d="M4 7h11l-3-3M20 17H9l3 3"/>',
+  plug:'<path d="M9 7V3M15 7V3M6 7h12v4a6 6 0 0 1-12 0zM12 17v4"/>',
+  users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6 6 0 0 0-4-5.6"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  upload:'<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>', check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>', x:'<path d="M6 6l12 12M18 6L6 18"/>',
+  alert:'<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  lock:'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+};
+const icon = n => `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICON[n]||""}</svg>`;
+const chip = (text, kind = "", dot = false) => `<span class="chip ${kind}">${dot ? '<span class="dot" aria-hidden="true"></span>' : ""}${esc(text)}</span>`;
+const status = ok => ok == null ? chip("Not configured") : ok ? chip("Up", "ok", true) : chip("Down", "bad", true);
+const meter = (pct, label) => { const v = Math.max(0, Math.min(100, Math.round(pct))); return `<div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v}" aria-label="${esc(label)}" aria-valuetext="${v}%"><span style="width:${v}%"></span></div>`; };
 
-function toast(msg, bad){ const t=$("#toast"); t.textContent=msg; t.style.background=bad?"var(--bad)":""; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),2600); }
-async function api(path, opts={}){
-  const r = await fetch("/vault/console/api/"+path, {credentials:"same-origin", ...opts});
-  if (r.status === 401) { ME=null; render(); throw new Error("Please log in"); }
-  const ct = r.headers.get("content-type")||"";
+/* --------------------------------------------------- preferences (a11y) */
+const PREF_KEY = "vault-console-prefs";
+let PREFS = { theme: "system", scale: 1, motion: "system", live: true };
+try { Object.assign(PREFS, JSON.parse(localStorage.getItem(PREF_KEY) || "{}")); } catch (e) {}
+function applyPrefs() {
+  const r = document.documentElement;
+  if (PREFS.theme === "system") r.removeAttribute("data-theme"); else r.setAttribute("data-theme", PREFS.theme);
+  r.style.setProperty("--scale", PREFS.scale);
+  if (PREFS.motion === "reduce") r.setAttribute("data-motion", "reduce"); else r.removeAttribute("data-motion");
+  try { localStorage.setItem(PREF_KEY, JSON.stringify(PREFS)); } catch (e) {}
+}
+applyPrefs();
+
+/* ------------------------------------------------ announcements & toasts */
+function announce(msg, assertive = false) {
+  const el = assertive ? $("#alert") : $("#live");
+  el.textContent = ""; setTimeout(() => { el.textContent = msg; }, 50);
+}
+function toast(msg, bad = false) {
+  announce(msg, bad);
+  const t = document.createElement("div");
+  t.className = "toast" + (bad ? " bad" : ""); t.innerHTML = icon(bad ? "alert" : "check") + `<span>${esc(msg)}</span>`;
+  $("#toasts").appendChild(t); setTimeout(() => t.remove(), bad ? 7000 : 4000);
+}
+
+/* ----------------------------------------------- accessible confirm dialog */
+function confirmDialog(title, body, action = "Confirm") {
+  return new Promise(resolve => {
+    const d = $("#dlg"), opener = document.activeElement;
+    $("#dlg-title").textContent = title; $("#dlg-body").textContent = body; $("#dlg-yes").textContent = action;
+    $("#dlg-yes").className = /delete|remove/i.test(action) ? "danger" : "primary";
+    const done = v => { d.close(); resolve(v); if (opener && opener.focus) opener.focus(); };
+    $("#dlg-yes").onclick = () => done(true); $("#dlg-no").onclick = () => done(false);
+    d.oncancel = e => { e.preventDefault(); done(false); };
+    d.showModal(); $("#dlg-no").focus();
+  });
+}
+
+/* --------------------------------------------------------------- api */
+let ME = null;
+async function api(path, opts = {}) {
+  const r = await fetch("/vault/console/api/" + path, { credentials: "same-origin", ...opts });
+  if (r.status === 401 && path !== "login") { ME = null; route(); throw new Error("Your session ended. Please sign in again."); }
+  const ct = r.headers.get("content-type") || "";
   const data = ct.includes("json") ? await r.json() : await r.text();
-  if (!r.ok) throw new Error(data.message || data.error || ("HTTP "+r.status));
+  if (!r.ok) throw new Error(data.message || data.error || ("Request failed (HTTP " + r.status + ")"));
   return data;
 }
-const q = o => new URLSearchParams(o).toString();
 
-// ---------------------------------------------------------------- shell
-function render(){
+/* ------------------------------------------------------------ routing */
+const VIEWS = [
+  { id: "buckets", label: "Buckets", icon: "bucket", group: "Storage", fn: vBuckets },
+  { id: "browser", label: "Object browser", icon: "files", group: "Storage", fn: vBrowser },
+  { id: "overview", label: "Architecture", icon: "arch", group: "Operations", admin: true, fn: vOverview, live: true },
+  { id: "cluster", label: "Cluster and drives", icon: "server", group: "Operations", admin: true, fn: vCluster, live: true },
+  { id: "healing", label: "Healing", icon: "heal", group: "Operations", admin: true, fn: vHealing, live: true },
+  { id: "replication", label: "Replication", icon: "repl", group: "Operations", admin: true, fn: vReplication, live: true },
+  { id: "services", label: "Services and usage", icon: "plug", group: "Operations", admin: true, fn: vServices },
+  { id: "users", label: "Users", icon: "users", group: "Administration", admin: true, fn: vUsers },
+  { id: "settings", label: "Display settings", icon: "gear", group: "Administration", fn: vSettings },
+];
+let STATE = { bucket: "", prefix: "" }, TIMER = null, CURRENT = null;
+
+function route() {
   clearInterval(TIMER);
   if (!ME) return renderLogin();
-  const items = [["buckets","Buckets"],["browser","Object browser"],["overview","Architecture"],["cluster","Cluster & drives"],
-                 ["healing","Healing"],["replication","Replication"],["services","Services"],["users","Users"]];
-  const adminViews = new Set(["overview","cluster","healing","replication","services","users"]);
-  $("#root").innerHTML = `<div class="app"><nav><div class="brand"><i></i>Vault</div>
-    ${items.map(([k,l])=>`<a data-v="${k}" class="${k===VIEW?"on":""} ${adminViews.has(k)&&!ME.admin?"admin-only hidden":""}">${l}</a>`).join("")}
-    <div class="who">${esc(ME.user)} · ${esc(ME.source||"")}<br><span class="link" id="logout">Log out</span></div></nav>
-    <main id="main"><p class="muted">Loading…</p></main></div>`;
-  document.querySelectorAll("nav a").forEach(a => a.onclick = () => { VIEW=a.dataset.v; render(); });
-  $("#logout").onclick = async () => { await api("logout",{method:"POST"}); ME=null; render(); };
-  const fn = {buckets:vBuckets, browser:vBrowser, overview:vOverview, cluster:vCluster, healing:vHealing,
-              replication:vReplication, services:vServices, users:vUsers}[VIEW];
-  const run = () => fn().catch(e => { $("#main").innerHTML = `<div class="card bad">${esc(e.message)}</div>`; });
-  run();
-  if (["cluster","healing","replication","overview"].includes(VIEW)) TIMER = setInterval(run, 3000);
+  const id = (location.hash.match(/^#\/([\w-]+)/) || [])[1] || "buckets";
+  let view = VIEWS.find(v => v.id === id && (!v.admin || ME.admin)) || VIEWS[0];
+  if (!$(".app")) renderShell();  // (the login page also has a #main)
+  $$(".side nav a").forEach(a => { if (a.dataset.v === view.id) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+  const first = CURRENT !== view.id; CURRENT = view.id;
+  document.title = view.label + " · Vault Console";
+  $("#live-toggle").hidden = !view.live;
+  show(view, first);
+  if (view.live) TIMER = setInterval(() => { const m = $("#main"), a = document.activeElement;
+    if (PREFS.live && m && (!m.contains(a) || a === m)) show(view, false, true); }, 5000);
 }
 
-function renderLogin(){
-  $("#root").innerHTML = `<div class="login card"><h1>Vault Console</h1><p class="sub">Sign in with an access key and secret key.</p>
-    <form id="lf"><input id="ak" placeholder="Access key" autocomplete="username" required>
-    <input id="sk" type="password" placeholder="Secret key" autocomplete="current-password" required>
-    <button class="primary" style="width:100%">Sign in</button><p id="le" class="muted"></p></form></div>`;
-  $("#lf").onsubmit = async e => { e.preventDefault();
-    try { await api("login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({access_key:$("#ak").value,secret_key:$("#sk").value})});
-          ME = await api("me"); render(); } catch(err){ $("#le").textContent = err.message; } };
+async function show(view, focusHeading, quiet = false) {
+  const main = $("#main");
+  main.setAttribute("aria-busy", "true");
+  try { await view.fn(main); }
+  catch (e) { main.innerHTML = `<h1 id="page-title">${esc(view.label)}</h1><div class="card" role="alert">${icon("alert")} ${esc(e.message)}</div>`; }
+  finally { main.removeAttribute("aria-busy"); }
+  if (focusHeading) { const h = $("#page-title"); if (h) { h.setAttribute("tabindex", "-1"); h.focus(); } announce(view.label + " page loaded"); }
 }
 
-// -------------------------------------------------------------- buckets
-async function vBuckets(){
+function renderShell() {
+  const groups = [...new Set(VIEWS.map(v => v.group))];
+  const initials = (ME.user || "?").slice(0, 2).toUpperCase();
+  $("#root").innerHTML = `<div class="app">
+    <aside class="side" aria-label="Sidebar">
+      <div class="brand"><span class="logo" aria-hidden="true">${icon("bucket")}</span><span>Vault</span></div>
+      <nav aria-label="Main navigation">${groups.map(g => {
+        const items = VIEWS.filter(v => v.group === g && (!v.admin || ME.admin));
+        if (!items.length) return "";
+        return `<p class="navgroup" id="ng-${g}">${g}</p><ul aria-labelledby="ng-${g}">${items.map(v =>
+          `<li><a href="#/${v.id}" data-v="${v.id}">${icon(v.icon)}<span>${v.label}</span></a></li>`).join("")}</ul>`; }).join("")}
+      </nav>
+      <div class="me">
+        <div class="who"><span class="avatar" aria-hidden="true">${esc(initials)}</span>
+          <div><strong>${esc(ME.user)}</strong><div class="hint">${ME.admin ? "Administrator" : "User"} · ${esc(ME.source || "local")}</div></div></div>
+        <button type="button" id="logout">Sign out</button>
+      </div>
+    </aside>
+    <div>
+      <header class="top">
+        <p class="grow hint">Fault-tolerant S3 storage · erasure coded · self-healing</p>
+        <button type="button" class="pill-toggle" id="live-toggle" aria-pressed="${PREFS.live}">Live updates</button>
+      </header>
+      <main id="main" tabindex="-1"></main>
+    </div></div>`;
+  $("#logout").onclick = async () => { try { await api("logout", { method: "POST" }); } catch (e) {} ME = null; CURRENT = null; announce("Signed out"); route(); };
+  $("#live-toggle").onclick = e => { PREFS.live = !PREFS.live; applyPrefs(); e.currentTarget.setAttribute("aria-pressed", PREFS.live);
+    announce("Live updates " + (PREFS.live ? "on" : "paused")); };
+}
+
+/* -------------------------------------------------------------- login */
+function renderLogin() {
+  document.title = "Sign in · Vault Console";
+  $("#root").innerHTML = `<div class="login-wrap"><main id="main" class="login" tabindex="-1">
+    <div class="card">
+      <div class="brand"><span class="logo" aria-hidden="true">${icon("bucket")}</span><span>Vault</span></div>
+      <h1 id="page-title" style="margin-top:1rem">Sign in to the console</h1>
+      <p class="sub">Use an access key and secret key. Administrators see cluster views too.</p>
+      <form id="lf" novalidate>
+        <div class="field"><label for="ak">Access key</label>
+          <input id="ak" name="username" autocomplete="username" required aria-describedby="ak-err" spellcheck="false" autocapitalize="off">
+          <span class="err" id="ak-err"></span></div>
+        <div class="field"><label for="sk">Secret key</label>
+          <div class="pw"><input id="sk" name="password" type="password" autocomplete="current-password" required aria-describedby="sk-err">
+          <button type="button" id="showpw" aria-pressed="false" aria-controls="sk">Show</button></div>
+          <span class="err" id="sk-err"></span></div>
+        <p class="err" id="login-err" role="alert"></p>
+        <button class="primary" type="submit">${icon("lock")}Sign in</button>
+      </form>
+    </div></main></div>`;
+  $("#showpw").onclick = e => { const s = $("#sk"), on = s.type === "password"; s.type = on ? "text" : "password";
+    e.currentTarget.setAttribute("aria-pressed", on); e.currentTarget.textContent = on ? "Hide" : "Show"; };
+  $("#lf").onsubmit = async e => {
+    e.preventDefault(); let ok = true;
+    for (const [id, msg] of [["ak", "Enter your access key."], ["sk", "Enter your secret key."]]) {
+      const el = $("#" + id), bad = !el.value.trim();
+      el.setAttribute("aria-invalid", bad); $("#" + id + "-err").textContent = bad ? msg : ""; if (bad && ok) { el.focus(); ok = false; }
+    }
+    if (!ok) return;
+    const btn = $("#lf button[type=submit]"); btn.disabled = true; $("#login-err").textContent = "";
+    try {
+      await api("login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ access_key: $("#ak").value, secret_key: $("#sk").value }) });
+      ME = await api("me"); CURRENT = null; announce("Signed in as " + ME.user); route();
+    } catch (err) { $("#login-err").textContent = err.message; btn.disabled = false; $("#sk").focus(); }
+  };
+  $("#ak").focus();
+}
+
+/* ------------------------------------------------------------ buckets */
+async function vBuckets(main) {
   const bs = await api("buckets");
-  $("#main").innerHTML = `<h1>Buckets</h1><p class="sub">Every bucket is erasure coded across the cluster (EC 5+3 per set).</p>
-   <div class="card"><form class="row" id="nb"><input id="bn" class="grow" placeholder="new-bucket-name" pattern="[a-z0-9][a-z0-9.\\-]{1,61}[a-z0-9]" required>
-   <label class="row"><input type="checkbox" id="bv"> Versioning</label><button class="primary">Create bucket</button></form></div>
-   <div class="card"><table><tr><th>Name</th><th class="hide-sm">Created</th><th>Features</th><th></th></tr>
-   ${bs.map(b=>`<tr><td><span class="link" data-open="${esc(b.name)}">${esc(b.name)}</span></td><td class="hide-sm">${fmtT(b.created)}</td>
-    <td>${b.versioning==="Enabled"?'<span class="chip ok">versioned</span>':""}${b.encrypted?'<span class="chip">SSE default</span>':""}
-    ${b.replication?'<span class="chip">replicated</span>':""}${b.lifecycle?'<span class="chip">lifecycle</span>':""}
-    ${b.events?'<span class="chip">events</span>':""}${b.public?'<span class="chip warn">policy</span>':""}</td>
-    <td class="row end"><button class="danger" data-del="${esc(b.name)}">Delete</button></td></tr>`).join("") || `<tr><td colspan=4 class="muted">No buckets yet.</td></tr>`}</table></div>`;
-  $("#nb").onsubmit = async e => { e.preventDefault();
-    try { await api("buckets",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:$("#bn").value,versioning:$("#bv").checked})}); toast("Bucket created"); vBuckets(); } catch(err){ toast(err.message,1); } };
-  document.querySelectorAll("[data-open]").forEach(a => a.onclick = () => { STATE={bucket:a.dataset.open,prefix:""}; VIEW="browser"; render(); });
-  document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
-    if (!confirm(`Delete bucket ${b.dataset.del}? It must be empty.`)) return;
-    try { await api("buckets?"+q({name:b.dataset.del}),{method:"DELETE"}); toast("Bucket deleted"); vBuckets(); } catch(err){ toast(err.message,1); } });
+  main.innerHTML = `<div class="page-head"><div class="grow"><h1 id="page-title">Buckets</h1>
+      <p class="sub">Every bucket is erasure coded across the cluster (5 data + 3 parity pieces per object).</p></div></div>
+    <section class="card" aria-labelledby="nb-h"><h2 id="nb-h">Create a bucket</h2>
+      <form class="row" id="nb" novalidate>
+        <div class="field grow"><label for="bn">Bucket name</label>
+          <input id="bn" required aria-describedby="bn-hint bn-err" spellcheck="false" autocapitalize="off" autocomplete="off">
+          <span class="hint" id="bn-hint">3–63 characters: lowercase letters, numbers, dots and hyphens.</span>
+          <span class="err" id="bn-err"></span></div>
+        <div class="field">
+          <label style="display:flex;gap:.5rem;align-items:center;min-height:44px"><input type="checkbox" id="bv" style="min-height:auto;width:1.2rem;height:1.2rem"> Keep all versions</label></div>
+        <button class="primary" type="submit">Create bucket</button>
+      </form></section>
+    <section class="card" aria-labelledby="bl-h"><h2 id="bl-h">Your buckets <span class="chip">${bs.length}</span></h2>
+      ${bs.length ? `<div class="tbl" role="group" aria-labelledby="bl-h" tabindex="0"><table>
+        <caption class="sr-only">Buckets with creation date and enabled features</caption>
+        <thead><tr><th scope="col">Name</th><th scope="col">Created</th><th scope="col">Features</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+        <tbody>${bs.map(b => `<tr><th scope="row"><button type="button" class="ghost" data-open="${esc(b.name)}" style="padding:.3rem .2rem;color:var(--accent);text-decoration:underline">${icon("bucket")}${esc(b.name)}</button></th>
+          <td><time datetime="${isoT(b.created)}">${fmtT(b.created)}</time></td>
+          <td>${[b.versioning === "Enabled" && chip("Versioned", "ok"), b.encrypted && chip("Encrypted by default", "info"), b.replication && chip("Replicated", "info"),
+                b.lifecycle && chip("Lifecycle rules"), b.events && chip("Event notifications"), b.public && chip("Bucket policy", "warn")].filter(Boolean).join("") || '<span class="muted">None</span>'}</td>
+          <td class="actions"><button type="button" class="danger" data-del="${esc(b.name)}" aria-label="Delete bucket ${esc(b.name)}">Delete</button></td></tr>`).join("")}</tbody></table></div>`
+      : `<p class="empty">No buckets yet. Create one above.</p>`}</section>`;
+  $("#nb").onsubmit = async e => {
+    e.preventDefault(); const el = $("#bn"), name = el.value.trim();
+    const bad = !/^[a-z0-9][a-z0-9.\-]{1,61}[a-z0-9]$/.test(name);
+    el.setAttribute("aria-invalid", bad); $("#bn-err").textContent = bad ? "That isn't a valid bucket name. " + $("#bn-hint").textContent : "";
+    if (bad) { el.focus(); return; }
+    try { await api("buckets", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, versioning: $("#bv").checked }) });
+      toast(`Bucket ${name} created`); await vBuckets(main); $(`[data-open="${CSS.escape(name)}"]`)?.focus(); }
+    catch (err) { $("#bn-err").textContent = err.message; el.setAttribute("aria-invalid", "true"); el.focus(); announce(err.message, true); }
+  };
+  $$("[data-open]", main).forEach(b => b.onclick = () => { STATE = { bucket: b.dataset.open, prefix: "" }; location.hash = "#/browser"; });
+  $$("[data-del]", main).forEach(b => b.onclick = async () => {
+    const n = b.dataset.del;
+    if (!await confirmDialog("Delete bucket?", `Delete the bucket "${n}"? It must be empty. This can't be undone.`, "Delete bucket")) return;
+    try { await api("buckets?" + q({ name: n }), { method: "DELETE" }); toast(`Bucket ${n} deleted`); await vBuckets(main); $("#page-title").focus(); }
+    catch (err) { toast(err.message, true); }
+  });
 }
 
-// -------------------------------------------------------------- browser
-async function vBrowser(){
+/* ------------------------------------------------------------ browser */
+async function vBrowser(main) {
   const bs = await api("buckets");
   if (!STATE.bucket && bs.length) STATE.bucket = bs[0].name;
-  if (!STATE.bucket) { $("#main").innerHTML = `<h1>Object browser</h1><div class="card muted">Create a bucket first.</div>`; return; }
-  const d = await api("objects?"+q({bucket:STATE.bucket,prefix:STATE.prefix}));
+  if (!bs.length) { main.innerHTML = `<h1 id="page-title">Object browser</h1><div class="card empty">There are no buckets yet. <a href="#/buckets">Create a bucket</a> first.</div>`; return; }
+  const d = await api("objects?" + q({ bucket: STATE.bucket, prefix: STATE.prefix }));
   const parts = STATE.prefix.split("/").filter(Boolean);
-  const crumbs = [`<a data-p="">${esc(STATE.bucket)}</a>`].concat(parts.map((p,i)=>`<a data-p="${esc(parts.slice(0,i+1).join("/")+"/")}">${esc(p)}</a>`)).join(" / ");
-  $("#main").innerHTML = `<h1>Object browser</h1>
-   <div class="row" style="margin-bottom:12px"><select id="bsel">${bs.map(b=>`<option ${b.name===STATE.bucket?"selected":""}>${esc(b.name)}</option>`).join("")}</select>
-   <div class="crumbs grow">${crumbs}</div><label class="row"><input type="checkbox" id="enc"> Encrypt (SSE)</label>
-   <button class="primary" id="up">Upload files</button><input type="file" id="fi" multiple hidden></div>
-   <div class="drop" id="drop">Drop files here to upload to <b>${esc(STATE.bucket)}/${esc(STATE.prefix)}</b></div>
-   <div class="card" style="margin-top:12px"><table><tr><th>Name</th><th>Size</th><th class="hide-sm">Modified</th><th class="hide-sm">Info</th><th></th></tr>
-   ${d.prefixes.map(p=>`<tr><td>📁 <span class="link" data-p="${esc(p)}">${esc(p.slice(STATE.prefix.length))}</span></td><td></td><td class="hide-sm"></td><td class="hide-sm"></td><td></td></tr>`).join("")}
-   ${d.objects.map(o=>`<tr><td class="mono">${esc(o.key.slice(STATE.prefix.length))}</td><td class="num">${fmtB(o.size)}</td>
-     <td class="hide-sm">${fmtT(o.modified)}</td><td class="hide-sm">${o.encrypted?'<span class="chip ok">encrypted</span>':""}
-     ${o.storage_class!=="STANDARD"?`<span class="chip warn">${esc(o.storage_class)}</span>`:""}${o.replication?`<span class="chip">${esc(o.replication)}</span>`:""}</td>
-     <td class="row end"><a class="link" href="/vault/console/api/download?${q({bucket:STATE.bucket,key:o.key})}">Download</a>
-     <button class="danger" data-k="${esc(o.key)}">Delete</button></td></tr>`).join("")}
-   ${!d.prefixes.length&&!d.objects.length?`<tr><td colspan=5 class="muted">Empty. Upload something.</td></tr>`:""}</table>
-   ${d.truncated?'<p class="muted">Showing the first 500 entries.</p>':""}</div>`;
-  $("#bsel").onchange = e => { STATE={bucket:e.target.value,prefix:""}; vBrowser(); };
-  document.querySelectorAll("[data-p]").forEach(a => a.onclick = () => { STATE.prefix=a.dataset.p; vBrowser(); });
-  document.querySelectorAll("[data-k]").forEach(b => b.onclick = async () => {
-    if (!confirm("Delete "+b.dataset.k+"?")) return;
-    try { await api("objects?"+q({bucket:STATE.bucket,key:b.dataset.k}),{method:"DELETE"}); toast("Deleted"); vBrowser(); } catch(err){ toast(err.message,1); } });
-  const upload = async files => { for (const f of files) {
-      try { await api("objects?"+q({bucket:STATE.bucket,key:STATE.prefix+f.name}),{method:"PUT",body:f,
-              headers:{"x-content-type":f.type||"application/octet-stream","x-encrypt":$("#enc").checked?"1":"0"}}); toast("Uploaded "+f.name); }
-      catch(err){ toast(f.name+": "+err.message,1); } } vBrowser(); };
-  $("#up").onclick = () => $("#fi").click(); $("#fi").onchange = e => upload(e.target.files);
-  const dz = $("#drop"); dz.ondragover = e => { e.preventDefault(); dz.classList.add("over"); };
-  dz.ondragleave = () => dz.classList.remove("over"); dz.ondrop = e => { e.preventDefault(); dz.classList.remove("over"); upload(e.dataTransfer.files); };
+  const crumbs = [["", STATE.bucket]].concat(parts.map((p, i) => [parts.slice(0, i + 1).join("/") + "/", p]));
+  const count = d.prefixes.length + d.objects.length;
+  main.innerHTML = `<div class="page-head"><div class="grow"><h1 id="page-title">Object browser</h1>
+      <p class="sub">Upload, download and delete objects. Folders are key prefixes ending in “/”.</p></div>
+      <div class="field"><label for="bsel">Bucket</label><select id="bsel">${bs.map(b => `<option ${b.name === STATE.bucket ? "selected" : ""}>${esc(b.name)}</option>`).join("")}</select></div></div>
+    <nav class="crumbs card" aria-label="Folder path" style="padding:.6rem 1rem"><ol>${crumbs.map(([p, label], i) => i === crumbs.length - 1
+      ? `<li><span aria-current="location" class="crumbs-cur" style="font-weight:700;padding:.2rem .5rem">${esc(label)}</span></li>`
+      : `<li><button type="button" data-p="${esc(p)}">${esc(label)}</button></li>`).join("")}</ol></nav>
+    <section class="card" aria-labelledby="up-h"><h2 id="up-h">Upload</h2>
+      <div class="drop" id="drop"><p>${icon("upload")} Drag files here, or</p>
+        <div class="row center" style="justify-content:center;margin-top:.5rem">
+          <button type="button" class="primary" id="pick">Choose files…</button>
+          <label style="display:flex;gap:.5rem;align-items:center;min-height:44px"><input type="checkbox" id="enc" style="min-height:auto;width:1.2rem;height:1.2rem"> Encrypt at rest (SSE)</label></div>
+        <p class="hint">Uploading to <span class="mono">${esc(STATE.bucket)}/${esc(STATE.prefix)}</span></p>
+        <input type="file" id="fi" multiple hidden aria-hidden="true" tabindex="-1"></div>
+      <ul class="uploads" id="uploads" aria-label="Upload progress"></ul></section>
+    <section class="card" aria-labelledby="ls-h"><h2 id="ls-h">Contents <span class="chip">${count} item${count === 1 ? "" : "s"}</span></h2>
+      ${count ? `<div class="tbl" role="group" aria-labelledby="ls-h" tabindex="0"><table>
+      <caption class="sr-only">Folders and objects in ${esc(STATE.bucket)}/${esc(STATE.prefix)}</caption>
+      <thead><tr><th scope="col">Name</th><th scope="col" class="num">Size</th><th scope="col">Modified</th><th scope="col">Details</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody>
+      ${d.prefixes.map(p => `<tr><th scope="row"><button type="button" class="ghost" data-p="${esc(p)}" style="padding:.3rem .2rem;color:var(--accent);text-decoration:underline">${icon("folder")}<span class="sr-only">Folder: </span>${esc(p.slice(STATE.prefix.length))}</button></th><td class="num">—</td><td>—</td><td>${chip("Folder")}</td><td></td></tr>`).join("")}
+      ${d.objects.map(o => { const name = o.key.slice(STATE.prefix.length); return `<tr><th scope="row" class="mono">${esc(name)}</th><td class="num">${fmtB(o.size)}</td>
+        <td><time datetime="${isoT(o.modified)}">${fmtT(o.modified)}</time></td>
+        <td>${[o.encrypted && chip("Encrypted", "ok"), o.storage_class !== "STANDARD" && chip("Tier: " + o.storage_class, "warn"), o.replication && chip("Replication: " + o.replication.toLowerCase(), "info")].filter(Boolean).join("") || '<span class="muted">Standard</span>'}</td>
+        <td class="actions"><a class="btn" href="/vault/console/api/download?${q({ bucket: STATE.bucket, key: o.key })}" aria-label="Download ${esc(name)}">Download</a>
+        <button type="button" class="danger" data-k="${esc(o.key)}" aria-label="Delete ${esc(name)}">Delete</button></td></tr>`; }).join("")}
+      </tbody></table></div>${d.truncated ? '<p class="hint">Showing the first 500 entries.</p>' : ""}` : `<p class="empty">This folder is empty. Upload something above.</p>`}</section>`;
+  $("#bsel").onchange = e => { STATE = { bucket: e.target.value, prefix: "" }; vBrowser(main).then(() => $("#bsel").focus()); announce("Showing bucket " + e.target.value); };
+  $$("[data-p]", main).forEach(b => b.onclick = async () => { STATE.prefix = b.dataset.p; await vBrowser(main); $("#page-title").focus(); announce("Opened " + (STATE.prefix || STATE.bucket)); });
+  $$("[data-k]", main).forEach(b => b.onclick = async () => {
+    if (!await confirmDialog("Delete object?", `Delete "${b.dataset.k}"? On versioned buckets a delete marker is added instead.`, "Delete object")) return;
+    try { await api("objects?" + q({ bucket: STATE.bucket, key: b.dataset.k }), { method: "DELETE" }); toast("Deleted " + b.dataset.k); await vBrowser(main); $("#page-title").focus(); }
+    catch (err) { toast(err.message, true); }
+  });
+  $("#pick").onclick = () => $("#fi").click();
+  $("#fi").onchange = e => uploadAll([...e.target.files], main);
+  const dz = $("#drop");
+  dz.ondragover = e => { e.preventDefault(); dz.classList.add("over"); };
+  dz.ondragleave = () => dz.classList.remove("over");
+  dz.ondrop = e => { e.preventDefault(); dz.classList.remove("over"); uploadAll([...e.dataTransfer.files], main); };
 }
 
-// ------------------------------------------------------------ architecture
-async function vOverview(){
+function uploadOne(file, li) {
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest(), bar = li.querySelector("[role=progressbar]"), fill = bar.firstElementChild;
+    x.open("PUT", "/vault/console/api/objects?" + q({ bucket: STATE.bucket, key: STATE.prefix + file.name }));
+    x.setRequestHeader("x-content-type", file.type || "application/octet-stream");
+    x.setRequestHeader("x-encrypt", $("#enc").checked ? "1" : "0");
+    x.upload.onprogress = e => { if (e.lengthComputable) { const v = Math.round(e.loaded / e.total * 100);
+      bar.setAttribute("aria-valuenow", v); bar.setAttribute("aria-valuetext", v + "%"); fill.style.width = v + "%"; } };
+    x.onload = () => x.status < 300 ? resolve() : reject(new Error((() => { try { return JSON.parse(x.responseText).message; } catch (e) { return "HTTP " + x.status; } })()));
+    x.onerror = () => reject(new Error("Network error"));
+    x.send(file);
+  });
+}
+async function uploadAll(files, main) {
+  if (!files.length) return;
+  const list = $("#uploads");
+  announce(`Uploading ${files.length} file${files.length > 1 ? "s" : ""}`);
+  let ok = 0;
+  for (const f of files) {
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="mono">${esc(f.name)} <span class="hint">(${fmtB(f.size)})</span></span>${meter(0, "Upload progress for " + f.name)}<span class="st">${chip("Uploading", "info")}</span>`;
+    list.appendChild(li);
+    try { await uploadOne(f, li); ok++; li.querySelector(".st").innerHTML = chip("Done", "ok"); }
+    catch (err) { li.querySelector(".st").innerHTML = chip("Failed", "bad"); toast(`${f.name}: ${err.message}`, true); }
+  }
+  toast(`${ok} of ${files.length} file${files.length > 1 ? "s" : ""} uploaded`);
+  const keep = list.innerHTML; await vBrowser(main); $("#uploads").innerHTML = keep; $("#pick").focus();
+}
+
+/* ------------------------------------------------------- architecture */
+async function vOverview(main) {
   const [c, s, r, h] = await Promise.all([api("cluster"), api("services"), api("replication"), api("healing")]);
-  const sets = c.storage.sets, drivesOk = sets.reduce((a,x)=>a+x.online,0), drivesAll = sets.reduce((a,x)=>a+x.n,0);
-  const nodesUp = c.nodes.filter(n=>n.state==="online").length;
-  const st = ok => ok===null||ok===undefined ? '<span class="chip">n/a</span>' : ok ? '<span class="chip ok">up</span>' : '<span class="chip bad">down</span>';
-  const evOk = s.targets.events.every(t=>t.online), auOk = s.targets.audit.every(t=>t.online);
+  const sets = c.storage.sets, drivesOk = sets.reduce((a, x) => a + x.online, 0), drivesAll = sets.reduce((a, x) => a + x.n, 0);
+  const nodesUp = c.nodes.filter(n => n.state === "online").length;
+  const evOk = s.targets.events.every(t => t.online), auOk = s.targets.audit.every(t => t.online);
   const groups = [
-    ["Client and API", [["API Surface",true],["Application Facade",true],["Object API",true]]],
-    ["Storage Core", [["Storage Facade",sets.every(x=>x.online>=x.write_quorum)],["Bucket Metadata",true],["Object Metadata",true],
-                      ["Erasure Coding (native C++)",c.nodes.every(n=>n.native!==false)],["Disk Storage",drivesOk===drivesAll]]],
-    ["Distributed Operations", [["Scanner Service",true],["Healing Service",true],["Cluster RPC",nodesUp===c.nodes.length],["Bucket Replication",r.total.failed===0]]],
-    ["Security and Governance", [["Lifecycle Engine",true],["Encryption KMS",s.kms.online],["IAM and OIDC",true]]],
-    ["External Integrations", [["Event Notifications",evOk],["Replication Metrics",true],["Audit Pipeline",auOk]]],
-    ["Outside", [["KMS Provider (HashiCorp Vault)",s.kms.online],["Keystone Service",s.keystone.configured?s.keystone.online:null],
-                 ["Event Targets",evOk],["Audit Targets",auOk],["Remote S3 tiers: "+(s.tiers.join(", ")||"none"),null]]]];
-  $("#main").innerHTML = `<h1>Architecture</h1><p class="sub">Every box of the design, with live status. Refreshes every 3 s.</p>
-   <div class="grid" style="margin-bottom:16px">
-    <div class="card stat"><div class="k">Nodes online</div><div class="v">${nodesUp}/${c.nodes.length}</div></div>
-    <div class="card stat"><div class="k">Drives online</div><div class="v">${drivesOk}/${drivesAll}</div></div>
-    <div class="card stat"><div class="k">Erasure sets</div><div class="v">${sets.length} × EC ${sets[0].n-sets[0].parity}+${sets[0].parity}</div></div>
-    <div class="card stat"><div class="k">Replication backlog</div><div class="v">${r.total.queued_count}</div></div>
-    <div class="card stat"><div class="k">Heal queue</div><div class="v">${h.queue + h.mrf}</div></div></div>
-   <div class="arch">${groups.map(([g,bs])=>`<div class="card g"><h3>${esc(g)}</h3>${bs.map(([n,ok])=>`<div class="box"><span>${esc(n)}</span>${st(ok)}</div>`).join("")}</div>`).join("")}</div>`;
+    ["Client and API", [["API Surface", true], ["Application Facade", true], ["Object API", true]]],
+    ["Storage Core", [["Storage Facade", sets.every(x => x.online >= x.write_quorum)], ["Bucket Metadata", true], ["Object Metadata", true],
+      ["Erasure Coding (native C++)", c.nodes.every(n => n.native !== false)], ["Disk Storage", drivesOk === drivesAll]]],
+    ["Distributed Operations", [["Scanner Service", true], ["Healing Service", true], ["Cluster RPC", nodesUp === c.nodes.length], ["Bucket Replication", r.total.failed === 0]]],
+    ["Security and Governance", [["Lifecycle Engine", true], ["Encryption KMS", s.kms.online], ["IAM and OIDC", true]]],
+    ["External Integrations", [["Event Notifications", evOk], ["Replication Metrics", true], ["Audit Pipeline", auOk]]],
+    ["Outside", [["KMS Provider (HashiCorp Vault)", s.kms.online], ["Keystone Service", s.keystone.configured ? s.keystone.online : null],
+      ["Event Targets", s.targets.events.length ? evOk : null], ["Audit Targets", s.targets.audit.length ? auOk : null], ["Remote S3 tiers", s.tiers.length ? true : null]]]];
+  const healthy = nodesUp === c.nodes.length && drivesOk === drivesAll;
+  main.innerHTML = `<div class="page-head"><div class="grow"><h1 id="page-title">Architecture</h1>
+      <p class="sub">Every box of the system design with its live status.</p></div>
+      ${healthy ? chip("All systems healthy", "ok", true) : chip("Degraded: data still safe while quorum holds", "warn", true)}</div>
+    <section aria-labelledby="kpi-h"><h2 id="kpi-h" class="sr-only">Key figures</h2><div class="grid">
+      ${[["Nodes online", `${nodesUp}/${c.nodes.length}`, "gRPC cluster"], ["Drives online", `${drivesOk}/${drivesAll}`, "each set tolerates 3 failures"],
+         ["Erasure sets", `${sets.length} × EC ${sets[0].n - sets[0].parity}+${sets[0].parity}`, "1.6× storage overhead"],
+         ["Replication backlog", r.total.queued_count, `${r.total.completed} completed`], ["Heal queue", h.queue + h.mrf, "objects waiting for repair"]]
+        .map(([k, v, n]) => `<div class="card stat"><p class="k">${k}</p><p class="v">${v}</p><p class="note">${n}</p></div>`).join("")}</div></section>
+    <div class="arch">${groups.map(([g, bs], gi) => `<section class="card" aria-labelledby="ag-${gi}"><h2 id="ag-${gi}">${esc(g)}</h2>
+      <ul>${bs.map(([n, ok]) => `<li><span>${esc(n)}</span>${status(ok)}</li>`).join("")}</ul></section>`).join("")}</div>`;
 }
 
-// ---------------------------------------------------------------- cluster
-async function vCluster(){
+/* ------------------------------------------------------------ cluster */
+async function vCluster(main) {
   const c = await api("cluster");
-  $("#main").innerHTML = `<h1>Cluster & drives</h1><p class="sub">Each erasure set tolerates ${c.storage.sets[0].parity} failed drives. Refreshes every 3 s.</p>
-   <div class="card"><table><tr><th>Node</th><th>State</th><th>Uptime</th><th>Native core</th><th>Drives</th><th>Scanner cycle</th></tr>
-   ${c.nodes.map(n=>`<tr><td><b>${esc(n.node)}</b></td><td>${n.state==="online"?'<span class="chip ok">online</span>':'<span class="chip bad">offline</span>'}</td>
-    <td class="num">${n.uptime!=null?Math.round(n.uptime/60)+" min":"–"}</td><td>${n.native?"ISA-L + BLAKE3":"–"}</td>
-    <td class="num">${(n.drives||[]).filter(d=>d.online!==false).length}/${(n.drives||[]).length}</td><td class="num">${n.scanner?.cycle ?? "–"}</td></tr>`).join("")}</table></div>
-   ${c.storage.sets.map(s=>`<div class="card"><div class="row"><b class="grow">Erasure set ${s.set}</b>
-     <span class="chip ${s.online>=s.write_quorum?"ok":"bad"}">${s.online}/${s.n} online</span>
-     <span class="chip">read quorum ${s.read_quorum}</span><span class="chip">write quorum ${s.write_quorum}</span></div>
-     <div class="drives">${s.drives.map(d=>{ const pct = d.total? d.used/d.total*100:0;
-       return `<div class="drive ${d.state==="ok"?"ok":"bad"}" title="${esc(d.endpoint)}"><b>${esc(d.endpoint.split(":")[0])}</b>${esc((d.endpoint.split(":")[1]||"").replace("/data/",""))}
-       ${d.state==="ok"?`<div class="bar"><i style="width:${pct.toFixed(0)}%"></i></div>${d.healing?'<span class="chip warn">healing</span>':""}`:`<div class="muted">${esc(d.error||"offline")}</div>`}</div>`}).join("")}</div></div>`).join("")}`;
+  main.innerHTML = `<div class="page-head"><div class="grow"><h1 id="page-title">Cluster and drives</h1>
+      <p class="sub">Each erasure set tolerates ${c.storage.sets[0].parity} failed drives. A whole node holds only 2 drives of each set.</p></div></div>
+    <section class="card" aria-labelledby="nodes-h"><h2 id="nodes-h">Nodes</h2><div class="tbl" role="group" aria-labelledby="nodes-h" tabindex="0"><table>
+      <caption class="sr-only">Storage nodes and their state</caption>
+      <thead><tr><th scope="col">Node</th><th scope="col">State</th><th scope="col" class="num">Uptime</th><th scope="col">Native core</th><th scope="col" class="num">Drives</th><th scope="col" class="num">Scanner cycle</th></tr></thead>
+      <tbody>${c.nodes.map(n => `<tr><th scope="row">${esc(n.node)}</th><td>${n.state === "online" ? chip("Online", "ok", true) : chip("Offline", "bad", true)}</td>
+        <td class="num">${n.uptime != null ? Math.round(n.uptime / 60) + " min" : "—"}</td><td>${n.native ? "ISA-L + BLAKE3" : "—"}</td>
+        <td class="num">${(n.drives || []).filter(d => d.online !== false).length} of ${(n.drives || []).length}</td><td class="num">${n.scanner?.cycle ?? "—"}</td></tr>`).join("")}</tbody></table></div></section>
+    ${c.storage.sets.map(s => `<section class="card" aria-labelledby="set-${s.set}"><div class="row center"><h2 id="set-${s.set}" class="grow" style="margin:0">Erasure set ${s.set}</h2>
+      ${chip(`${s.online} of ${s.n} drives online`, s.online >= s.write_quorum ? "ok" : "bad", true)}${chip("Read quorum " + s.read_quorum)}${chip("Write quorum " + s.write_quorum)}</div>
+      <ul class="drives" aria-label="Drives in erasure set ${s.set}">${s.drives.map(d => { const pct = d.total ? d.used / d.total * 100 : 0; const [node, path] = d.endpoint.split(":");
+        return `<li class="drive ${d.state === "ok" ? "" : "bad"}"><strong>${esc(node)}</strong><span class="mono">${esc(path || "")}</span>
+          <div>${d.state === "ok" ? (d.healing ? chip("Healing", "warn") : chip("Online", "ok")) : chip("Offline", "bad")}</div>
+          ${d.state === "ok" ? meter(pct, `Disk usage for ${d.endpoint}`) + `<span class="hint">${pct.toFixed(0)}% used</span>` : `<span class="hint">${esc(d.error || "unreachable")}</span>`}</li>`; }).join("")}</ul></section>`).join("")}`;
 }
 
-// ---------------------------------------------------------------- healing
-async function vHealing(){
-  const h = await api("healing"), bs = await api("buckets");
-  const drives = Object.entries(h.drives||{});
-  $("#main").innerHTML = `<h1>Healing</h1><p class="sub">MRF heals partial writes in seconds; the scanner finds bitrot and stale copies; wiped drives are rebuilt automatically.</p>
-   <div class="grid"><div class="card stat"><div class="k">MRF queue</div><div class="v">${h.mrf}</div></div>
-   <div class="card stat"><div class="k">Heal queue</div><div class="v">${h.queue}</div></div>
-   <div class="card stat"><div class="k">Drive heals</div><div class="v">${drives.length}</div></div></div>
-   <div class="card"><div class="row"><select id="hb">${bs.map(b=>`<option>${esc(b.name)}</option>`).join("")}</select>
-    <button class="primary" id="hgo">Heal bucket now</button><span id="hres" class="muted"></span></div></div>
-   <div class="card"><b>Drive heals</b><table>${drives.map(([ep,s])=>`<tr><td class="mono">${esc(ep)}</td><td>${esc(s.state)}</td>
-     <td style="width:40%"><div class="bar"><i style="width:${((s.progress||0)*100).toFixed(0)}%"></i></div></td><td class="num">${s.objects??""}/${s.total??""}</td></tr>`).join("")
-     || '<tr><td class="muted">No drive heals on this node.</td></tr>'}</table></div>
-   <div class="card"><b>Recent object heals</b><table>${(h.recent||[]).slice().reverse().map(r=>`<tr><td class="mono">${esc(r.bucket)}/${esc(r.key)}</td>
-     <td>${r.healed.length} drive(s) repaired${r.dangling_removed.length?", stale copies removed":""}</td><td>${fmtT(r.time)}</td></tr>`).join("")
-     || '<tr><td class="muted">Nothing needed healing recently.</td></tr>'}</table></div>`;
-  $("#hgo").onclick = async () => { clearInterval(TIMER); $("#hres").textContent = "Healing…";
-    try { const r = await api("heal?"+q({bucket:$("#hb").value}),{method:"POST"}); $("#hres").textContent = `Scanned ${r.scanned}, healed ${r.healed}.`; }
-    catch(err){ $("#hres").textContent = err.message; } };
+/* ------------------------------------------------------------ healing */
+async function vHealing(main) {
+  const [h, bs] = await Promise.all([api("healing"), api("buckets")]);
+  const drives = Object.entries(h.drives || {});
+  main.innerHTML = `<div class="page-head"><div class="grow"><h1 id="page-title">Healing</h1>
+      <p class="sub">Partial writes are healed within seconds; the scanner finds bitrot and stale copies; wiped drives are rebuilt automatically.</p></div></div>
+    <div class="grid">${[["Partial-write queue", h.mrf, "most recently failed writes"], ["Heal queue", h.queue, "scanner and read-error findings"], ["Drive heals", drives.length, "on this node"]]
+      .map(([k, v, n]) => `<div class="card stat"><p class="k">${k}</p><p class="v">${v}</p><p class="note">${n}</p></div>`).join("")}</div>
+    <section class="card" aria-labelledby="hb-h"><h2 id="hb-h">Heal a bucket now</h2>
+      <form class="row" id="hf"><div class="field"><label for="hb">Bucket</label><select id="hb">${bs.map(b => `<option>${esc(b.name)}</option>`).join("")}</select></div>
+      <button class="primary" type="submit" ${bs.length ? "" : "disabled"}>Start heal</button><p id="hres" class="hint" role="status" style="align-self:center"></p></form></section>
+    <section class="card" aria-labelledby="dh-h"><h2 id="dh-h">Drive heals</h2>${drives.length ? `<ul class="uploads">${drives.map(([ep, s]) =>
+      `<li><span class="mono">${esc(ep)}</span>${meter((s.progress || 0) * 100, "Heal progress for " + ep)}<span>${chip(s.state, s.state === "done" ? "ok" : s.state === "failed" ? "bad" : "warn")} ${s.objects ?? ""} / ${s.total ?? ""}</span></li>`).join("")}</ul>`
+      : '<p class="empty">No drive heals on this node.</p>'}</section>
+    <section class="card" aria-labelledby="rh-h"><h2 id="rh-h">Recent object heals</h2>${(h.recent || []).length ? `<div class="tbl" role="group" aria-labelledby="rh-h" tabindex="0"><table>
+      <caption class="sr-only">Objects repaired recently</caption><thead><tr><th scope="col">Object</th><th scope="col">Result</th><th scope="col">Time</th></tr></thead>
+      <tbody>${h.recent.slice().reverse().map(r => `<tr><th scope="row" class="mono">${esc(r.bucket)}/${esc(r.key)}</th>
+        <td>${r.healed.length} drive${r.healed.length === 1 ? "" : "s"} repaired${r.dangling_removed.length ? ", stale copies removed" : ""}</td><td><time datetime="${isoT(r.time)}">${fmtT(r.time)}</time></td></tr>`).join("")}</tbody></table></div>`
+      : '<p class="empty">Nothing needed healing recently.</p>'}</section>`;
+  $("#hf").onsubmit = async e => { e.preventDefault(); const b = $("#hb").value; $("#hres").textContent = "Healing " + b + "…";
+    try { const r = await api("heal?" + q({ bucket: b }), { method: "POST" }); $("#hres").textContent = `Done: scanned ${r.scanned} objects, repaired ${r.healed}.`; }
+    catch (err) { $("#hres").textContent = err.message; } };
 }
 
-// ------------------------------------------------------------ replication
-async function vReplication(){
+/* -------------------------------------------------------- replication */
+async function vReplication(main) {
   const r = await api("replication"), t = r.total;
-  $("#main").innerHTML = `<h1>Replication</h1><p class="sub">Bucket replication to Remote S3, aggregated from every node.</p>
-   <div class="grid">${[["Queued",t.queued_count],["Queued bytes",fmtB(t.queued_bytes)],["In flight",t.in_flight],["Completed",t.completed],
-     ["Failed",t.failed],["Lag",t.lag_seconds.toFixed(1)+" s"],["Latency p99",t.latency_p99.toFixed(2)+" s"]]
-     .map(([k,v])=>`<div class="card stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")}</div>
-   <div class="card"><table><tr><th>Node</th><th>Queued</th><th>Completed</th><th>Failed</th><th>Lag</th></tr>
-   ${r.nodes.map(n=>`<tr><td>${esc(n.node)}</td><td class="num">${n.queued_count}</td><td class="num">${n.completed}</td><td class="num">${n.failed}</td><td class="num">${(n.lag_seconds||0).toFixed(1)} s</td></tr>`).join("")}</table></div>`;
+  main.innerHTML = `<div class="page-head"><div class="grow"><h1 id="page-title">Replication</h1>
+      <p class="sub">Copies of objects sent to Remote S3, aggregated from every node.</p></div>
+      ${t.queued_count ? chip(`${t.queued_count} waiting`, "warn", true) : chip("Backlog clear", "ok", true)}</div>
+    <div class="grid">${[["Waiting", t.queued_count], ["Waiting size", fmtB(t.queued_bytes)], ["In flight", t.in_flight], ["Completed", t.completed],
+      ["Failed", t.failed], ["Lag", t.lag_seconds.toFixed(1) + " s"], ["Latency p99", t.latency_p99.toFixed(2) + " s"]]
+      .map(([k, v]) => `<div class="card stat"><p class="k">${k}</p><p class="v">${v}</p></div>`).join("")}</div>
+    <section class="card" aria-labelledby="rn-h"><h2 id="rn-h">Per node</h2><div class="tbl" role="group" aria-labelledby="rn-h" tabindex="0"><table>
+      <caption class="sr-only">Replication statistics per node</caption>
+      <thead><tr><th scope="col">Node</th><th scope="col" class="num">Waiting</th><th scope="col" class="num">Completed</th><th scope="col" class="num">Failed</th><th scope="col" class="num">Lag</th></tr></thead>
+      <tbody>${r.nodes.map(n => `<tr><th scope="row">${esc(n.node)}</th><td class="num">${n.queued_count}</td><td class="num">${n.completed}</td><td class="num">${n.failed}</td><td class="num">${(n.lag_seconds || 0).toFixed(1)} s</td></tr>`).join("")}</tbody></table></div></section>`;
 }
 
-// --------------------------------------------------------------- services
-async function vServices(){
-  const s = await api("services"), u = await api("usage");
-  const st = ok => ok ? '<span class="chip ok">online</span>' : '<span class="chip bad">offline</span>';
-  $("#main").innerHTML = `<h1>Services</h1><p class="sub">External services from the diagram and per-bucket usage from the scanner.</p>
-   <div class="card"><table><tr><th>Service</th><th>Status</th><th>Detail</th></tr>
-    <tr><td>KMS Provider</td><td>${st(s.kms.online)}</td><td class="mono">${esc(s.kms.provider)} ${esc(s.kms.addr||"")}</td></tr>
-    <tr><td>Keystone</td><td>${s.keystone.configured?st(s.keystone.online):'<span class="chip">not configured</span>'}</td><td></td></tr>
-    ${s.targets.events.map(t=>`<tr><td>Event target</td><td>${st(t.online)}</td><td class="mono">${esc(t.arn)} · queued ${t.queued}</td></tr>`).join("")}
-    ${s.targets.audit.map(t=>`<tr><td>Audit target</td><td>${st(t.online)}</td><td class="mono">${esc(t.id)} · queued ${t.queued}</td></tr>`).join("")}
-    <tr><td>Remote S3 tiers</td><td></td><td>${esc(s.tiers.join(", ")||"none configured")}</td></tr></table></div>
-   <div class="card"><b>Usage by bucket</b> <span class="muted">(updated each scanner cycle)</span><table><tr><th>Bucket</th><th>Objects</th><th>Versions</th><th>Size</th><th>Repl. pending</th></tr>
-   ${Object.entries(u.buckets).map(([b,x])=>`<tr><td>${esc(b)}</td><td class="num">${x.objects}</td><td class="num">${x.versions}</td><td class="num">${fmtB(x.bytes)}</td><td class="num">${x.replication_pending}</td></tr>`).join("")
-     || '<tr><td class="muted" colspan=5>No scanner data yet.</td></tr>'}</table></div>`;
+/* ----------------------------------------------------------- services */
+async function vServices(main) {
+  const [s, u] = await Promise.all([api("services"), api("usage")]);
+  const rows = [["KMS Provider", status(s.kms.online), `${s.kms.provider} ${s.kms.addr || ""}`], ["Keystone", status(s.keystone.configured ? s.keystone.online : null), ""]]
+    .concat(s.targets.events.map(t => ["Event target", status(t.online), `${t.arn} · ${t.queued} queued`]))
+    .concat(s.targets.audit.map(t => ["Audit target", status(t.online), `${t.id} · ${t.queued} queued`]))
+    .concat([["Remote S3 tiers", status(s.tiers.length ? true : null), s.tiers.join(", ") || "none configured"]]);
+  const ub = Object.entries(u.buckets);
+  main.innerHTML = `<div class="page-head"><div class="grow"><h1 id="page-title">Services and usage</h1>
+      <p class="sub">External services from the design, plus per-bucket usage measured by the scanner.</p></div></div>
+    <section class="card" aria-labelledby="sv-h"><h2 id="sv-h">External services</h2><div class="tbl" role="group" aria-labelledby="sv-h" tabindex="0"><table>
+      <caption class="sr-only">External services and their status</caption>
+      <thead><tr><th scope="col">Service</th><th scope="col">Status</th><th scope="col">Detail</th></tr></thead>
+      <tbody>${rows.map(([a, b, c]) => `<tr><th scope="row">${esc(a)}</th><td>${b}</td><td class="mono">${esc(c)}</td></tr>`).join("")}</tbody></table></div></section>
+    <section class="card" aria-labelledby="us-h"><h2 id="us-h">Usage by bucket</h2>${ub.length ? `<div class="tbl" role="group" aria-labelledby="us-h" tabindex="0"><table>
+      <caption class="sr-only">Objects, versions and bytes per bucket</caption>
+      <thead><tr><th scope="col">Bucket</th><th scope="col" class="num">Objects</th><th scope="col" class="num">Versions</th><th scope="col" class="num">Size</th><th scope="col" class="num">Replication pending</th></tr></thead>
+      <tbody>${ub.map(([b, x]) => `<tr><th scope="row">${esc(b)}</th><td class="num">${x.objects}</td><td class="num">${x.versions}</td><td class="num">${fmtB(x.bytes)}</td><td class="num">${x.replication_pending}</td></tr>`).join("")}</tbody></table></div>`
+      : '<p class="empty">No scanner data yet. Usage appears after the first scanner cycle.</p>'}</section>`;
 }
 
-// ------------------------------------------------------------------ users
-async function vUsers(){
+/* -------------------------------------------------------------- users */
+async function vUsers(main) {
   const d = await api("users");
-  $("#main").innerHTML = `<h1>Users</h1><p class="sub">Local IAM users. Keystone and OIDC users are managed in their own systems.</p>
-   <div class="card"><form class="row" id="nu"><input id="uak" placeholder="access key" required><input id="usk" type="password" placeholder="secret key (8+ chars)" minlength="8" required>
-   <select id="upol">${d.policies.map(p=>`<option>${esc(p)}</option>`).join("")}</select><button class="primary">Add user</button></form></div>
-   <div class="card"><table><tr><th>Access key</th><th>Status</th><th>Policies</th><th></th></tr>
-   ${d.users.map(u=>`<tr><td class="mono">${esc(u.access_key)}</td><td><span class="chip ${u.status==="enabled"?"ok":"bad"}">${esc(u.status)}</span></td>
-    <td>${u.policies.map(p=>`<span class="chip">${esc(p)}</span>`).join("")}</td><td class="row end"><button class="danger" data-u="${esc(u.access_key)}">Remove</button></td></tr>`).join("")
-    || '<tr><td class="muted" colspan=4>No users yet (the root user always exists).</td></tr>'}</table></div>`;
-  $("#nu").onsubmit = async e => { e.preventDefault();
-    try { await api("users",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({access_key:$("#uak").value,secret_key:$("#usk").value,policies:[$("#upol").value]})}); toast("User added"); vUsers(); }
-    catch(err){ toast(err.message,1); } };
-  document.querySelectorAll("[data-u]").forEach(b => b.onclick = async () => { if (!confirm("Remove "+b.dataset.u+"?")) return;
-    try { await api("users?"+q({access_key:b.dataset.u}),{method:"DELETE"}); toast("Removed"); vUsers(); } catch(err){ toast(err.message,1); } });
+  main.innerHTML = `<div class="page-head"><div class="grow"><h1 id="page-title">Users</h1>
+      <p class="sub">Local IAM users. Keystone and OIDC users are managed in their own systems.</p></div></div>
+    <section class="card" aria-labelledby="nu-h"><h2 id="nu-h">Add a user</h2>
+      <form class="row" id="nu" novalidate>
+        <div class="field grow"><label for="uak">Access key</label><input id="uak" required autocomplete="off" spellcheck="false" aria-describedby="uak-err"><span class="err" id="uak-err"></span></div>
+        <div class="field grow"><label for="usk">Secret key</label><input id="usk" type="password" required minlength="8" autocomplete="new-password" aria-describedby="usk-hint usk-err">
+          <span class="hint" id="usk-hint">At least 8 characters.</span><span class="err" id="usk-err"></span></div>
+        <div class="field"><label for="upol">Policy</label><select id="upol">${d.policies.map(p => `<option>${esc(p)}</option>`).join("")}</select><span class="err"></span></div>
+        <button class="primary" type="submit">Add user</button></form></section>
+    <section class="card" aria-labelledby="ul-h"><h2 id="ul-h">Users <span class="chip">${d.users.length}</span></h2>${d.users.length ? `<div class="tbl" role="group" aria-labelledby="ul-h" tabindex="0"><table>
+      <caption class="sr-only">Users, status and attached policies</caption>
+      <thead><tr><th scope="col">Access key</th><th scope="col">Status</th><th scope="col">Policies</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>${d.users.map(u => `<tr><th scope="row" class="mono">${esc(u.access_key)}</th><td>${chip(u.status === "enabled" ? "Enabled" : "Disabled", u.status === "enabled" ? "ok" : "bad")}</td>
+        <td>${u.policies.map(p => chip(p)).join("")}</td><td class="actions"><button type="button" class="danger" data-u="${esc(u.access_key)}" aria-label="Remove user ${esc(u.access_key)}">Remove</button></td></tr>`).join("")}</tbody></table></div>`
+      : '<p class="empty">No users yet. The root user always exists.</p>'}</section>`;
+  $("#nu").onsubmit = async e => {
+    e.preventDefault(); let ok = true;
+    for (const [id, test, msg] of [["uak", v => v.length >= 3, "Access key needs at least 3 characters."], ["usk", v => v.length >= 8, "Secret key needs at least 8 characters."]]) {
+      const el = $("#" + id), bad = !test(el.value); el.setAttribute("aria-invalid", bad); $("#" + id + "-err").textContent = bad ? msg : ""; if (bad && ok) { el.focus(); ok = false; }
+    }
+    if (!ok) return;
+    try { await api("users", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ access_key: $("#uak").value, secret_key: $("#usk").value, policies: [$("#upol").value] }) });
+      toast("User " + $("#uak").value + " added"); await vUsers(main); $("#page-title").focus(); }
+    catch (err) { $("#uak-err").textContent = err.message; announce(err.message, true); }
+  };
+  $$("[data-u]", main).forEach(b => b.onclick = async () => {
+    if (!await confirmDialog("Remove user?", `Remove the user "${b.dataset.u}"? Their keys stop working immediately.`, "Remove user")) return;
+    try { await api("users?" + q({ access_key: b.dataset.u }), { method: "DELETE" }); toast("User removed"); await vUsers(main); $("#page-title").focus(); }
+    catch (err) { toast(err.message, true); }
+  });
 }
 
-api("me").then(m => { ME=m; render(); }).catch(() => render());
+/* ----------------------------------------------------------- settings */
+async function vSettings(main) {
+  const opt = (name, value, label) => `<label style="display:flex;gap:.6rem;align-items:center;min-height:44px;font-weight:400"><input type="radio" name="${name}" value="${value}" ${String(PREFS[name]) === String(value) ? "checked" : ""} style="min-height:auto;width:1.2rem;height:1.2rem">${label}</label>`;
+  main.innerHTML = `<div class="page-head"><div class="grow"><h1 id="page-title">Display settings</h1>
+      <p class="sub">Saved in this browser. These add to your operating system's own accessibility settings.</p></div></div>
+    <form class="settings" id="sf">
+      <fieldset class="card"><legend><h2 style="margin:0">Theme</h2></legend>
+        ${opt("theme", "system", "Match my system")}${opt("theme", "light", "Light")}${opt("theme", "dark", "Dark")}${opt("theme", "contrast", "High contrast (black and yellow)")}</fieldset>
+      <fieldset class="card"><legend><h2 style="margin:0">Text size</h2></legend>
+        ${opt("scale", 1, "Default (100%)")}${opt("scale", 1.125, "Large (112%)")}${opt("scale", 1.25, "Larger (125%)")}${opt("scale", 1.5, "Largest (150%)")}</fieldset>
+      <fieldset class="card"><legend><h2 style="margin:0">Motion</h2></legend>
+        ${opt("motion", "system", "Match my system")}${opt("motion", "reduce", "Reduce motion")}</fieldset>
+      <fieldset class="card"><legend><h2 style="margin:0">Live updates</h2></legend>
+        <p class="hint">Status pages refresh every 5 seconds. Refreshing pauses while focus is inside the page, so it never moves your place.</p>
+        ${opt("live", true, "On")}${opt("live", false, "Paused")}</fieldset>
+    </form>`;
+  $("#sf").onchange = e => {
+    const { name, value } = e.target;
+    PREFS[name] = name === "scale" ? Number(value) : name === "live" ? value === "true" : value;
+    applyPrefs(); const lt = $("#live-toggle"); if (lt) lt.setAttribute("aria-pressed", PREFS.live);
+    announce("Setting saved: " + e.target.closest("label").textContent.trim());
+  };
+}
+
+/* --------------------------------------------------------------- boot */
+window.addEventListener("hashchange", route);
+api("me").then(m => { ME = m; route(); }).catch(() => route());
 </script>
 </body>
 </html>
