@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/vault/:path*",
-      "destination": "https://shopzilla-welding-identity-four.trycloudflare.com/vault/:path*"
+      "destination": "https://lemon-protection-customise-med.trycloudflare.com/vault/:path*"
     },
     {
       "source": "/",
