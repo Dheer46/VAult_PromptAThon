@@ -6,8 +6,9 @@ The Vault web console (`/vault/console`, source: `vault/admin/console.html`) tar
 ## How it was verified
 
 - **axe-core 4.10** (tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, `wcag22aa`, `best-practice`)
-  run against all 9 views in all 3 themes (light, dark, high contrast), plus the sign-in page
-  and the open confirmation dialog: **0 violations** (27 of 27 view/theme combinations clean).
+  run against all 10 views (including the Overview dashboard) in all 3 themes (light, dark,
+  high contrast), plus the sign-in page and the open confirmation dialog, with a real 1280x900
+  viewport: **0 violations** (33 of 33 page/theme combinations clean).
 - **Reflow (1.4.10)**: every view measured in a 320 px viewport at 100% and 150% text size:
   no horizontal page scrolling. Wide tables scroll inside their own box instead.
 - **Keyboard**: every action works without a mouse. The confirm dialog opens with focus on
@@ -32,7 +33,8 @@ The Vault web console (`/vault/console`, source: `vault/admin/console.html`) tar
 | Motion | Honors `prefers-reduced-motion`, plus a manual "reduce motion" setting | 2.3.3 |
 | Auto-updating content | Live status pages can be paused ("Live updates" toggle), and refresh never runs while focus is inside the page | 2.2.2 |
 | Target size | Interactive controls are at least 44 × 44 px | 2.5.8 |
-| Progress | Upload, heal and disk-usage bars use `role="progressbar"` with values | 4.1.2 |
+| Progress | Upload, heal, capacity and disk-usage bars use `role="progressbar"` with values | 4.1.2 |
+| Charts | The data-vs-parity chart is an SVG with `role="img"`, a title and a text description, plus a screen-reader data table; patterns and a legend, not color alone, separate data from parity | 1.1.1, 1.4.1 |
 
 ## Display settings
 

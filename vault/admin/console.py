@@ -131,6 +131,27 @@ class ConsoleAPI:
         if path == "objects" and m == "DELETE":
             await app.delete_object(ctx, q["bucket"], q["key"], None)
             return JSONResponse({"ok": True})
+        if path == "overview" and m == "GET":
+            # dashboard feed: per-bucket totals + most recently modified objects
+            buckets, recent = [], []
+            for b in await app.list_buckets(ctx):
+                try:
+                    res = await app.list_objects(ctx, b["name"], "", "", "", 1000)
+                except errors.S3Error:
+                    continue
+                total = 0
+                for o in res.objects:
+                    size = app.objects.plain_size(o.version)
+                    total += size
+                    recent.append({"bucket": b["name"], "key": o.key, "size": size,
+                                   "modified": o.version.mod_time_ns / 1e9,
+                                   "encrypted": "x-vault-internal-sse" in o.version.meta_sys,
+                                   "replication": o.version.meta_sys.get("x-vault-replication-status", ""),
+                                   "storage_class": o.version.meta_user.get("x-amz-storage-class", "STANDARD")})
+                buckets.append({"name": b["name"], "objects": len(res.objects), "bytes": total,
+                                "truncated": res.is_truncated})
+            recent.sort(key=lambda r: r["modified"], reverse=True)
+            return JSONResponse({"buckets": buckets, "recent": recent[:12]})
         if path == "download":
             status, h, stream = await app.get_object(ctx, q["bucket"], q["key"], q.get("version") or None, {})
             name = urllib.parse.quote(q["key"].rsplit("/", 1)[-1])

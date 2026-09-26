@@ -137,7 +137,7 @@ Without a KMS Provider configured, a clearly-labelled development KMS is used so
 
 ## Accessibility
 
-The web console targets WCAG 2.2 AA: an axe-core audit reports 0 violations across all 9 views in the light, dark and high-contrast themes, and every view reflows at 320 px with 150% text. See [ACCESSIBILITY.md](ACCESSIBILITY.md).
+The web console targets WCAG 2.2 AA: an axe-core audit reports 0 violations across all 10 views in the light, dark and high-contrast themes, and every view reflows at 320 px with 150% text. See [ACCESSIBILITY.md](ACCESSIBILITY.md).
 
 ## Tests
 
