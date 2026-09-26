@@ -3,5 +3,14 @@
   "buildCommand": "",
   "installCommand": "",
   "outputDirectory": ".",
-  "rewrites": [{ "source": "/", "destination": "/vault/admin/console.html" }]
+  "rewrites": [
+    {
+      "source": "/vault/:path*",
+      "destination": "https://shopzilla-welding-identity-four.trycloudflare.com/vault/:path*"
+    },
+    {
+      "source": "/",
+      "destination": "/vault/admin/console.html"
+    }
+  ]
 }
