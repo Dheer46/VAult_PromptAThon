@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/vault/:path*",
-      "destination": "https://lemon-protection-customise-med.trycloudflare.com/vault/:path*"
+      "destination": "https://stat-karma-bar-tested.trycloudflare.com/vault/:path*"
     },
     {
       "source": "/",
